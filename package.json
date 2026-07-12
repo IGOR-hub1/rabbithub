@@ -1,0 +1,11 @@
+{
+  "name": "draksyon",
+  "version": "1.0.0",
+  "description": "Draksyon — site de animes com servidor proxy local (corrige ERR_BLOCKED_BY_RESPONSE / CORP).",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": { "node": ">=18" }
+}
