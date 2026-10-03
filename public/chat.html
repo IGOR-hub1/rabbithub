@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
+<meta name="theme-color" content="#254BFF">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Veja respostas, comunicados e avisos da sua conta no RabbitHub Animes.">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<title>Notificações — RabbitHub Animes</title>
+<link rel="icon" href="img/logo-blue.jpg" type="image/jpeg">
+<script src="theme.js?v=20260719-6"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="dk-auth-shim.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="social-firebase-config.js?v=20260928-1"></script>
+<script src="social-firebase.js?v=20260928-1"></script>
+<script src="uid-utils.js?v=20260903-1"></script>
+<script src="plan-access.js?v=20261002-9"></script>
+<script src="auth-guard.js?v=20261002-3"></script>
+<script src="dk-message.js?v=20260929-1"></script>
+<link rel="stylesheet" href="app-refresh.css?v=20261002-13">
+<link rel="stylesheet" href="chat.css?v=20260929-2">
+<script src="app-refresh.js?v=20260929-4" defer></script>
+<script src="chat-inbox.js?v=20260929-2" defer></script>
+</head>
+<body data-page="chat">
+  <header class="chat-topbar">
+    <div class="chat-topbar-inner">
+      <a class="chat-back" href="index.html?tab=perfil" aria-label="Voltar ao perfil">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        <span>Voltar</span>
+      </a>
+      <span class="chat-topbar-title">RABBITHUB ANIMES</span>
+      <a class="chat-brand" href="index.html" aria-label="RabbitHub Animes — Início">
+        <img data-dk-logo src="img/logo-blue.jpg" alt="">
+      </a>
+    </div>
+  </header>
+
+  <main class="chat-page">
+    <section class="chat-hero" aria-labelledby="chat-title">
+      <div class="chat-hero-copy">
+        <span class="chat-kicker">Central da sua conta</span>
+        <h1 id="chat-title">Notificações</h1>
+        <p>Respostas aos seus comentários, novidades do RabbitHub e avisos importantes do sistema.</p>
+      </div>
+      <div class="chat-summary" aria-live="polite">
+        <strong id="chat-unread-count">0</strong>
+        <span>não lidas</span>
+      </div>
+    </section>
+
+    <section class="chat-inbox" aria-labelledby="chat-inbox-title">
+      <div class="chat-inbox-head">
+        <div>
+          <span class="chat-section-kicker">Atividade recente</span>
+          <h2 id="chat-inbox-title">Todas as notificações</h2>
+        </div>
+        <button class="chat-mark-all" id="chat-mark-all" type="button" hidden>Marcar todas como lidas</button>
+      </div>
+
+      <div class="chat-filters" role="tablist" aria-label="Filtrar notificações">
+        <button class="chat-filter active" type="button" role="tab" aria-selected="true" data-chat-filter="all">Todas <span id="chat-total-badge">0</span></button>
+        <button class="chat-filter" type="button" role="tab" aria-selected="false" data-chat-filter="unread">Não lidas <span id="chat-unread-badge">0</span></button>
+        <button class="chat-filter" type="button" role="tab" aria-selected="false" data-chat-filter="reply">Respostas <span id="chat-reply-badge">0</span></button>
+        <button class="chat-filter" type="button" role="tab" aria-selected="false" data-chat-filter="system">Sistema <span id="chat-system-badge">0</span></button>
+      </div>
+
+      <div class="chat-list" id="chat-list" aria-live="polite" aria-busy="true">
+        <div class="chat-state chat-loading-state">
+          <span class="chat-loader" aria-hidden="true"></span>
+          <strong>Carregando notificações</strong>
+          <p>Buscando as novidades vinculadas à sua conta e ao perfil ativo.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
