@@ -1,11 +1,33 @@
 'use strict';
 
+const {verifyFirebaseRequest}=require('../lib/firebase-auth');
+
 /* Proxy serverless usado pelo site publicado na Vercel. O APK e o servidor
    Node local continuam usando /proxy; esta função cobre o navegador web, onde
    server.js não permanece em execução. */
 const USER_AGENT = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 ' +
   '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
 const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+const MAX_REQUEST_BYTES = 256 * 1024;
+const RATE_WINDOW = 60 * 1000;
+const RATE_MAX = 120;
+const RATE = new Map();
+
+function consumeRate(request, userId) {
+  const forwarded = String(request.headers && request.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const address = forwarded || request.socket && request.socket.remoteAddress || 'unknown';
+  const key = String(userId || 'unknown').slice(0,128) + '|' + String(address).slice(0,100);
+  const now = Date.now();
+  if (RATE.size > 2000) {
+    for (const [entryKey,value] of RATE) if (now - value.startedAt >= RATE_WINDOW) RATE.delete(entryKey);
+  }
+  let value = RATE.get(key);
+  if (!value || now - value.startedAt >= RATE_WINDOW) value = {startedAt:now,count:0};
+  if (value.count >= RATE_MAX) return false;
+  value.count += 1;
+  RATE.set(key,value);
+  return true;
+}
 
 function hostnameAllowed(hostname) {
   const host = String(hostname || '').toLowerCase().replace(/\.$/, '');
@@ -13,7 +35,9 @@ function hostnameAllowed(hostname) {
     'meusanimes.blog',
     'meusdoramas.club',
     'blogger.com',
-    'googlevideo.com'
+    'blogspot.com',
+    'googlevideo.com',
+    'googleusercontent.com'
   ].some(domain => host === domain || host.endsWith('.' + domain));
 }
 
@@ -22,7 +46,9 @@ function targetFrom(request) {
   if (!raw || Array.isArray(raw)) return null;
   try {
     const parsed = new URL(String(raw));
-    if (!/^https?:$/.test(parsed.protocol) || !hostnameAllowed(parsed.hostname)) return null;
+    if (!/^https?:$/.test(parsed.protocol) || parsed.username || parsed.password ||
+        (parsed.port && parsed.port !== '80' && parsed.port !== '443') ||
+        !hostnameAllowed(parsed.hostname)) return null;
     return parsed;
   } catch (_) { return null; }
 }
@@ -32,7 +58,9 @@ function refererFrom(request, target) {
   if (raw && !Array.isArray(raw)) {
     try {
       const parsed = new URL(String(raw));
-      if (/^https?:$/.test(parsed.protocol) && hostnameAllowed(parsed.hostname)) return parsed.toString();
+      if (/^https?:$/.test(parsed.protocol) && !parsed.username && !parsed.password &&
+          (!parsed.port || parsed.port === '80' || parsed.port === '443') &&
+          hostnameAllowed(parsed.hostname)) return parsed.toString();
     } catch (_) {}
   }
   return target.origin + '/';
@@ -53,25 +81,19 @@ function blockedResponse(text) {
 }
 
 function responseHeaders(response, cacheControl) {
-  response.setHeader('Access-Control-Allow-Origin','*');
+  response.setHeader('Access-Control-Allow-Origin','https://rabbithub-7dvf.vercel.app');
   response.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');
-  response.setHeader('Access-Control-Allow-Headers','Content-Type, X-Requested-With, X-Same-Domain');
+  response.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type, X-Requested-With, X-Same-Domain');
   response.setHeader('Access-Control-Expose-Headers','X-RabbitHub-Final-URL');
-  response.setHeader('Cross-Origin-Resource-Policy','cross-origin');
+  response.setHeader('Cross-Origin-Resource-Policy','same-origin');
   response.setHeader('Cache-Control',cacheControl || 'no-store');
 }
 
 function cachePolicy(request,target) {
-  if (request.method === 'POST' || request.query && request.query.nocache === '1') return 'no-store';
-  if (/\/(?:posts\/get-video\.php|video\.g|BloggerVideoPlayerUi\/data\/batchexecute)$/i.test(target.pathname) ||
-      /googlevideo\.com$/i.test(target.hostname)) return 'no-store';
-  /* A página do episódio contém apenas o iframe/navegação. Um cache curto
-     remove a maior espera do player sem persistir o token final do vídeo. */
-  if (/^\/e\//i.test(target.pathname)) return 'public, s-maxage=30, stale-while-revalidate=30';
-  if (target.searchParams.has('s') || target.pathname === '/' || /^\/g\/em-lancamento\//i.test(target.pathname)) {
-    return 'public, s-maxage=120, stale-while-revalidate=300';
-  }
-  return 'public, s-maxage=300, stale-while-revalidate=600';
+  // A autorização não participa da chave do CDN. Cache compartilhado aqui
+  // permitiria que uma resposta autenticada fosse reutilizada por um visitante
+  // sem sessão. O APK já mantém seu próprio cache privado no dispositivo.
+  return 'no-store';
 }
 
 async function fetchAllowed(target, options, redirects) {
@@ -81,7 +103,9 @@ async function fetchAllowed(target, options, redirects) {
   const location = upstream.headers.get('location');
   if (!location || redirects <= 0) throw new Error('Redirecionamento inválido.');
   const next = new URL(location,target);
-  if (!/^https?:$/.test(next.protocol) || !hostnameAllowed(next.hostname)) {
+  if (!/^https?:$/.test(next.protocol) || next.username || next.password ||
+      (next.port && next.port !== '80' && next.port !== '443') ||
+      !hostnameAllowed(next.hostname)) {
     throw new Error('Redirecionamento para destino não permitido.');
   }
   const nextOptions = Object.assign({},options);
@@ -104,6 +128,22 @@ module.exports = async function handler(request,response) {
     response.statusCode = 405;
     return response.end('Método não permitido.');
   }
+  let identity;
+  try {
+    identity = await verifyFirebaseRequest(request);
+  } catch (error) {
+    responseHeaders(response,'no-store');
+    response.setHeader('Content-Type','application/json; charset=utf-8');
+    response.statusCode = error && error.statusCode || 401;
+    return response.end(JSON.stringify({ok:false,error:error && error.message || 'Autenticação obrigatória.'}));
+  }
+  if (!consumeRate(request,identity && identity.sub)) {
+    responseHeaders(response,'no-store');
+    response.setHeader('Content-Type','application/json; charset=utf-8');
+    response.setHeader('Retry-After','60');
+    response.statusCode = 429;
+    return response.end(JSON.stringify({ok:false,error:'Muitas consultas. Aguarde um minuto.'}));
+  }
   const target = targetFrom(request);
   if (!target) {
     responseHeaders(response,'no-store');
@@ -115,6 +155,13 @@ module.exports = async function handler(request,response) {
   const timeout = setTimeout(() => controller.abort(),18000);
   try {
     const referer = refererFrom(request,target);
+    const outboundBody = requestBody(request);
+    if (outboundBody != null && Buffer.byteLength(outboundBody) > MAX_REQUEST_BYTES) {
+      responseHeaders(response,'no-store');
+      response.setHeader('Content-Type','application/json; charset=utf-8');
+      response.statusCode = 413;
+      return response.end(JSON.stringify({ok:false,error:'Solicitação muito grande.'}));
+    }
     const headers = {
       'User-Agent': USER_AGENT,
       'Accept': String(request.headers && request.headers.accept || 'text/html,application/json;q=0.9,*/*;q=0.8'),
@@ -129,7 +176,7 @@ module.exports = async function handler(request,response) {
     const upstream = await fetchAllowed(target,{
       method:request.method,
       headers,
-      body:requestBody(request),
+      body:outboundBody,
       signal:controller.signal
     });
     const length = Number(upstream.headers.get('content-length') || 0);
@@ -155,4 +202,4 @@ module.exports = async function handler(request,response) {
   }
 };
 
-module.exports._test = { hostnameAllowed, targetFrom, blockedResponse, requestBody, fetchAllowed, cachePolicy };
+module.exports._test = { hostnameAllowed, targetFrom, blockedResponse, requestBody, fetchAllowed, cachePolicy, consumeRate };
