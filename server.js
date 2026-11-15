@@ -19,17 +19,40 @@ const http  = require('http');
 const https = require('https');
 const fs    = require('fs');
 const path  = require('path');
-const url   = require('url');
 const zlib  = require('zlib');
 const crypto= require('crypto');
 
 const os = require('os');
+const {readBody} = require('./lib/http-body');
+
+// Carrega configurações locais de .env sem dependências externas. Variáveis
+// já definidas no sistema têm prioridade e nenhum segredo é enviado ao cliente.
+function loadLocalEnv(){
+  try {
+    const envFile = path.join(__dirname,'.env');
+    if (!fs.existsSync(envFile)) return;
+    fs.readFileSync(envFile,'utf8').split(/\r?\n/).forEach(line => {
+      const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+      if (!match || Object.prototype.hasOwnProperty.call(process.env,match[1])) return;
+      let value = match[2];
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1,-1);
+      process.env[match[1]] = value;
+    });
+  } catch(error) { console.warn('[draksyon] não foi possível ler .env:',error.message); }
+}
+loadLocalEnv();
+const R2Profile = require('./lib/r2-profile');
+const {verifyFirebaseRequest} = require('./lib/firebase-auth');
 
 const PORT       = process.env.PORT || 8080;
 const HOST       = process.env.HOST || '0.0.0.0';
 const PUBLIC_DIR = path.join(__dirname, 'public');
 const CACHE_TTL  = 1000 * 60 * 30; // 30 min para HTML/JSON
-const ORIGIN     = 'https://animefire.io';
+const MAX_BUFFERED_RESPONSE_BYTES = 4 * 1024 * 1024;
+const ORIGIN     = 'https://meusanimes.blog';
+const ANIME_NEWS_FEED = 'https://cr-news-api-service.prd.crunchyrollsvc.com/v1/pt-BR/rss';
+const COOKIE_JAR = new Map();
+let lastAnimeNews = null;
 
 const UA = 'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 ' +
            '(KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
@@ -84,13 +107,12 @@ const MIME = {
 };
 
 const CORS_HEADERS = {
-  'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': '*',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, Range, X-Requested-With, X-Same-Domain',
   'Access-Control-Expose-Headers':'Content-Length, Content-Range, Accept-Ranges',
-  'Cross-Origin-Resource-Policy': 'cross-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
   'Cross-Origin-Embedder-Policy': 'unsafe-none',
-  'Timing-Allow-Origin':          '*'
+  'Vary':                         'Origin'
 };
 
 function log(...a){ console.log('[' + new Date().toISOString() + ']', ...a); }
@@ -123,7 +145,13 @@ function cacheSet(key, payload){
 //   "TypeError: Header name must be a valid HTTP token [\"X-Foo Bar\"]"
 const VALID_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 function safeHeaders(obj){
-  const out = {};
+  const out = {
+    'X-Content-Type-Options':'nosniff',
+    'X-Frame-Options':'DENY',
+    'Referrer-Policy':'strict-origin-when-cross-origin',
+    'Cross-Origin-Opener-Policy':'same-origin',
+    'Permissions-Policy':'camera=(), microphone=(), geolocation=()'
+  };
   for (const k of Object.keys(obj || {})){
     if (!VALID_TOKEN.test(k)){
       log('header ignorado (nome inválido):', JSON.stringify(k));
@@ -136,19 +164,202 @@ function safeHeaders(obj){
   return out;
 }
 
+function hostnameAllowed(hostname){
+  const host=String(hostname||'').toLowerCase().replace(/\.$/,'');
+  return ['meusanimes.blog','meusdoramas.club','blogger.com','blogspot.com','googlevideo.com','googleusercontent.com','crunchyroll.com','crunchyrollsvc.com','storyblok.com']
+    .some(domain => host===domain||host.endsWith('.'+domain));
+}
+function allowedExternalUrl(value){
+  try{
+    const parsed=new URL(String(value||''));
+    if(!/^https?:$/.test(parsed.protocol)||parsed.username||parsed.password||
+       (parsed.port&&parsed.port!=='80'&&parsed.port!=='443')||!hostnameAllowed(parsed.hostname))return null;
+    return parsed;
+  }catch(error){return null;}
+}
+
+function sendJson(res, status, payload, extraHeaders){
+  res.writeHead(status, safeHeaders(Object.assign({
+    'Content-Type':'application/json; charset=utf-8',
+    'Cache-Control':'no-store'
+  }, CORS_HEADERS, extraHeaders || {})));
+  res.end(JSON.stringify(payload));
+}
+
+function decodeXml(value){
+  const named = { amp:'&', lt:'<', gt:'>', quot:'"', apos:"'", nbsp:' ' };
+  return String(value || '')
+    .replace(/^<!\[CDATA\[|\]\]>$/g, '')
+    .replace(/&#(x?[0-9a-f]+);/gi, (_, code) => {
+      const number = code[0].toLowerCase() === 'x' ? parseInt(code.slice(1),16) : parseInt(code,10);
+      return Number.isFinite(number) ? String.fromCodePoint(number) : '';
+    })
+    .replace(/&([a-z]+);/gi, (_, name) => named[name.toLowerCase()] || '')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function xmlTag(block, tag){
+  const escaped = String(tag).replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const match = String(block || '').match(new RegExp('<' + escaped + '(?:\\s[^>]*)?>([\\s\\S]*?)<\\/' + escaped + '>','i'));
+  return match ? decodeXml(match[1]) : '';
+}
+
+function safeExternalUrl(value, allowedHosts){
+  try{
+    const parsed = new URL(String(value || '').trim());
+    if (parsed.protocol !== 'https:') return '';
+    if (allowedHosts && allowedHosts.length && !allowedHosts.some(host => parsed.hostname === host || parsed.hostname.endsWith('.' + host))) return '';
+    return parsed.href;
+  }catch(e){ return ''; }
+}
+
+function parseAnimeNewsRss(xml){
+  const blocks = String(xml || '').match(/<item>[\s\S]*?<\/item>/gi) || [];
+  return blocks.slice(0,18).map((block, index) => {
+    const thumbnail = block.match(/<media:thumbnail\b[^>]*\burl=(?:"([^"]+)"|'([^']+)')[^>]*>/i);
+    const link = safeExternalUrl(xmlTag(block,'link'), ['crunchyroll.com']);
+    const published = xmlTag(block,'pubDate');
+    const timestamp = Date.parse(published);
+    return {
+      id: crypto.createHash('sha1').update(link || xmlTag(block,'title') || String(index)).digest('hex').slice(0,16),
+      title: xmlTag(block,'title').slice(0,180),
+      summary: xmlTag(block,'description').slice(0,320),
+      image: safeExternalUrl(thumbnail && (thumbnail[1] || thumbnail[2]), ['storyblok.com','crunchyroll.com']),
+      url: link,
+      category: xmlTag(block,'category').slice(0,60) || 'Notícias',
+      author: xmlTag(block,'author').slice(0,80),
+      publishedAt: Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : ''
+    };
+  }).filter(item => item.title && item.url);
+}
+
+function publicAnimeNewsItems(items){
+  return (Array.isArray(items) ? items : []).map(item => Object.assign({}, item, {
+    image:item.image ? '/api/anime-news-image?url=' + encodeURIComponent(item.image) : ''
+  }));
+}
+
+async function handleAnimeNewsImage(req, res, parsed){
+  if (req.method !== 'GET') return sendJson(res, 405, {ok:false,error:'method-not-allowed'}, {'Allow':'GET'});
+  const target = safeExternalUrl(parsed && parsed.query && parsed.query.url, ['storyblok.com','crunchyroll.com']);
+  if (!target){ res.writeHead(400); return res.end('Imagem inválida'); }
+  const key = cacheKey('GET', target, 'anime-news-image-v1');
+  const cached = cacheGet(key);
+  if (cached && cached.bodyB64 && cached.contentType){
+    res.writeHead(200, safeHeaders({'Content-Type':cached.contentType,'Cache-Control':'public, max-age=86400, stale-while-revalidate=604800'}));
+    return res.end(Buffer.from(cached.bodyB64,'base64'));
+  }
+  try{
+    const upstream = await fetchRaw(target, {
+      referer:'https://www.crunchyroll.com/pt-br/news',origin:'https://www.crunchyroll.com',
+      headers:{'Accept':'image/avif,image/webp,image/apng,image/*,*/*;q=0.8'}
+    });
+    const contentType = String(upstream.res && upstream.res.headers['content-type'] || '').split(';')[0].toLowerCase();
+    if (!upstream.res || upstream.res.statusCode < 200 || upstream.res.statusCode >= 300 || !contentType.startsWith('image/') || upstream.body.length > 6 * 1024 * 1024) throw new Error('imagem-indisponivel');
+    cacheSet(key,{contentType,bodyB64:upstream.body.toString('base64')});
+    res.writeHead(200,safeHeaders({'Content-Type':contentType,'Cache-Control':'public, max-age=86400, stale-while-revalidate=604800'}));
+    return res.end(upstream.body);
+  }catch(error){
+    log('anime news image err', error && error.message || error);
+    res.writeHead(502);return res.end('Imagem indisponível');
+  }
+}
+
+async function handleAnimeNews(req, res){
+  if (req.method !== 'GET') return sendJson(res, 405, {ok:false,error:'method-not-allowed'}, {'Allow':'GET'});
+  const key = cacheKey('GET', ANIME_NEWS_FEED, 'anime-news-v1');
+  const cached = cacheGet(key);
+  if (cached && Array.isArray(cached.items) && cached.items.length){
+    return sendJson(res, 200, {ok:true,source:'Crunchyroll News',sourceUrl:'https://www.crunchyroll.com/pt-br/news',cached:true,items:publicAnimeNewsItems(cached.items)});
+  }
+  try{
+    const upstream = await fetchRaw(ANIME_NEWS_FEED, {
+      referer:'https://www.crunchyroll.com/pt-br/news',
+      origin:'https://www.crunchyroll.com',
+      headers:{'Accept':'application/rss+xml, application/xml;q=0.9, text/xml;q=0.8'}
+    });
+    if (!upstream.res || upstream.res.statusCode < 200 || upstream.res.statusCode >= 300) throw new Error('feed-status-' + (upstream.res && upstream.res.statusCode));
+    const items = parseAnimeNewsRss(upstream.body.toString('utf8'));
+    if (!items.length) throw new Error('feed-sem-noticias');
+    const payload = {items,updatedAt:new Date().toISOString()};
+    lastAnimeNews = payload;
+    cacheSet(key, payload);
+    return sendJson(res, 200, {ok:true,source:'Crunchyroll News',sourceUrl:'https://www.crunchyroll.com/pt-br/news',cached:false,items:publicAnimeNewsItems(items)});
+  }catch(error){
+    log('anime news err', error && error.message || error);
+    if (lastAnimeNews && lastAnimeNews.items && lastAnimeNews.items.length){
+      return sendJson(res, 200, {ok:true,source:'Crunchyroll News',sourceUrl:'https://www.crunchyroll.com/pt-br/news',cached:true,stale:true,items:publicAnimeNewsItems(lastAnimeNews.items)});
+    }
+    return sendJson(res, 503, {ok:false,source:'Crunchyroll News',sourceUrl:'https://www.crunchyroll.com/pt-br/news',items:[],error:'noticias-indisponiveis'});
+  }
+}
+
+async function handleProfilePhotoUpload(req,res){
+  if(req.method!=='POST') return sendJson(res,405,{ok:false,error:'method-not-allowed'},{'Allow':'POST'});
+  try{
+    const user=await verifyFirebaseRequest(req);
+    const body=await R2Profile.readImageBody(req);
+    const uploaded=await R2Profile.uploadProfileImage(body,{uid:user.sub,profileId:req.headers['x-profile-id'],contentType:req.headers['content-type']});
+    return sendJson(res,200,{ok:true,url:uploaded.url});
+  }catch(error){
+    const status=Number(error.statusCode)||500;
+    return sendJson(res,status,{ok:false,error:error.message||'Falha ao enviar a foto.'});
+  }
+}
+
+function cookieKey(target){
+  try { return new URL(target).hostname.toLowerCase(); } catch(e){ return ''; }
+}
+function cookieHeader(target){
+  const now = Date.now();
+  const host = cookieKey(target);
+  const entries = COOKIE_JAR.get(host) || [];
+  const active = entries.filter(item => !item.expires || item.expires > now);
+  if (active.length !== entries.length) COOKIE_JAR.set(host, active);
+  return active.map(item => item.name + '=' + item.value).join('; ');
+}
+function rememberCookies(target, setCookie){
+  const host = cookieKey(target);
+  if (!host || !setCookie) return;
+  const lines = Array.isArray(setCookie) ? setCookie : [setCookie];
+  const saved = COOKIE_JAR.get(host) || [];
+  lines.forEach(line => {
+    const first = String(line || '').split(';')[0];
+    const separator = first.indexOf('=');
+    if (separator < 1) return;
+    const name = first.slice(0, separator).trim();
+    const value = first.slice(separator + 1).trim();
+    let expires = 0;
+    const maxAge = String(line).match(/;\s*Max-Age=(\d+)/i);
+    const expiry = String(line).match(/;\s*Expires=([^;]+)/i);
+    if (maxAge) expires = Date.now() + Number(maxAge[1]) * 1000;
+    else if (expiry) expires = Date.parse(expiry[1]) || 0;
+    const index = saved.findIndex(item => item.name === name);
+    const item = { name, value, expires };
+    if (index >= 0) saved[index] = item; else saved.push(item);
+  });
+  COOKIE_JAR.set(host, saved.slice(-40));
+}
+
 /* fetchRaw — buffered (para HTML/JSON/m3u8). Segue redirects. */
 function fetchRaw(target, opts = {}, maxRedirects = 5){
   return new Promise((resolve, reject) => {
-    const u = new URL(target);
+    const u = allowedExternalUrl(target);
+    if(!u){reject(new Error('Destino externo nao permitido.'));return;}
+    target=u.toString();
     const lib = u.protocol === 'http:' ? http : https;
     const headers = Object.assign({
       'User-Agent':       UA,
       'Accept':           '*/*',
       'Accept-Language':  'pt-BR,pt;q=0.9,en;q=0.8',
-      'Referer':          ORIGIN + '/',
-      'Origin':           ORIGIN,
+      'Referer':          opts.referer || ORIGIN + '/',
+      'Origin':           opts.origin || (() => { try { return new URL(opts.referer || target).origin; } catch(e){ return ORIGIN; } })(),
       'Accept-Encoding':  'gzip, deflate, br'
     }, opts.headers || {});
+    const cookies = cookieHeader(target);
+    if (cookies && !headers.Cookie) headers.Cookie = cookies;
     if (opts.range) headers['Range'] = opts.range;
 
     const req = lib.request({
@@ -159,21 +370,32 @@ function fetchRaw(target, opts = {}, maxRedirects = 5){
       headers:  headers,
       timeout:  20000
     }, (res) => {
+      rememberCookies(target, res.headers['set-cookie']);
       if ([301,302,303,307,308].includes(res.statusCode) && res.headers.location && maxRedirects > 0){
         const next = new URL(res.headers.location, target).toString();
         res.resume();
         return resolve(fetchRaw(next, opts, maxRedirects - 1));
       }
       const chunks = [];
-      res.on('data', c => chunks.push(c));
+      let receivedBytes = 0;
+      res.on('data', c => {
+        receivedBytes += c.length;
+        if (receivedBytes > MAX_BUFFERED_RESPONSE_BYTES) {
+          res.destroy(new Error('Resposta externa muito grande.'));
+          req.destroy();
+          return;
+        }
+        chunks.push(c);
+      });
       res.on('end', () => {
         let buf = Buffer.concat(chunks);
         const enc = (res.headers['content-encoding']||'').toLowerCase();
         try{
-          if (enc === 'gzip')    buf = zlib.gunzipSync(buf);
-          else if (enc === 'br') buf = zlib.brotliDecompressSync(buf);
-          else if (enc === 'deflate') buf = zlib.inflateSync(buf);
-        }catch(e){ /* keep raw */ }
+          const limits = {maxOutputLength:MAX_BUFFERED_RESPONSE_BYTES};
+          if (enc === 'gzip')    buf = zlib.gunzipSync(buf,limits);
+          else if (enc === 'br') buf = zlib.brotliDecompressSync(buf,limits);
+          else if (enc === 'deflate') buf = zlib.inflateSync(buf,limits);
+        }catch(e){ reject(new Error('Resposta comprimida inválida ou muito grande.')); return; }
         resolve({ res, body: buf, target });
       });
       res.on('error', reject);
@@ -192,17 +414,21 @@ function fetchRaw(target, opts = {}, maxRedirects = 5){
  */
 function streamUpstream(target, opts = {}, maxRedirects = 5){
   return new Promise((resolve, reject) => {
-    const u = new URL(target);
+    const u = allowedExternalUrl(target);
+    if(!u){reject(new Error('Destino externo nao permitido.'));return;}
+    target=u.toString();
     const lib = u.protocol === 'http:' ? http : https;
     const headers = Object.assign({
       'User-Agent':       UA,
       'Accept':           '*/*',
       'Accept-Language':  'pt-BR,pt;q=0.9,en;q=0.8',
-      'Referer':          ORIGIN + '/',
-      'Origin':           ORIGIN
+      'Referer':          opts.referer || ORIGIN + '/',
+      'Origin':           opts.origin || (() => { try { return new URL(opts.referer || target).origin; } catch(e){ return ORIGIN; } })()
       // Nota: NÃO enviamos Accept-Encoding em stream — queremos bytes crus
       // para repassar Content-Length / Range corretamente sem descomprimir.
     }, opts.headers || {});
+    const cookies = cookieHeader(target);
+    if (cookies && !headers.Cookie) headers.Cookie = cookies;
     if (opts.range) headers['Range'] = opts.range;
 
     const upReq = lib.request({
@@ -213,6 +439,7 @@ function streamUpstream(target, opts = {}, maxRedirects = 5){
       headers:  headers,
       timeout:  20000
     }, (upRes) => {
+      rememberCookies(target, upRes.headers['set-cookie']);
       if ([301,302,303,307,308].includes(upRes.statusCode) && upRes.headers.location && maxRedirects > 0){
         const next = new URL(upRes.headers.location, target).toString();
         upRes.resume();
@@ -240,21 +467,29 @@ function isBlocked(text){
 /* -------------------- handlers -------------------- */
 
 async function handleProxy(req, res, parsed){
-  const target = parsed.query.url;
-  if (!target || !/^https?:\/\//i.test(target)){
+  if(req.method!=='GET'&&req.method!=='POST'){
+    res.writeHead(405,safeHeaders(Object.assign({'Allow':'GET, POST'},CORS_HEADERS)));return res.end('Metodo nao permitido');
+  }
+  try{await verifyFirebaseRequest(req,{checkActive:false});}catch(error){
+    return sendJson(res,Number(error&&error.statusCode)||401,{ok:false,error:error&&error.message||'Autenticacao obrigatoria.'});
+  }
+  const targetUrl=allowedExternalUrl(parsed.query.url);
+  if (!targetUrl){
     res.writeHead(400, safeHeaders(CORS_HEADERS)); return res.end('Param "url" inválido');
   }
+  const target=targetUrl.toString();
 
   let body = '';
   if (req.method === 'POST'){
-    body = await new Promise(r => {
-      const chunks = []; req.on('data', c => chunks.push(c));
-      req.on('end', () => r(Buffer.concat(chunks).toString('utf8')));
-    });
+    try { body = await readBody(req); }
+    catch (error) { return sendJson(res,error.statusCode||400,{ok:false,error:error.message}); }
   }
 
-  const key = cacheKey(req.method, target, body);
-  const cached = cacheGet(key);
+  const noCache = parsed.query.nocache === '1';
+  const refererUrl=allowedExternalUrl(parsed.query.referer);
+  const referer=refererUrl?refererUrl.toString():undefined;
+  const key = cacheKey(req.method, target + '|' + (referer || ''), body);
+  const cached = noCache ? null : cacheGet(key);
   if (cached){
     res.writeHead(200, safeHeaders(Object.assign({
       'Content-Type': cached.contentType || 'text/html; charset=utf-8',
@@ -264,14 +499,19 @@ async function handleProxy(req, res, parsed){
   }
 
   try{
-    const headers = {};
+    const headers = {
+      'Accept': req.headers.accept || 'text/html,application/json;q=0.9,*/*;q=0.8'
+    };
+    if (req.headers['x-requested-with']) headers['X-Requested-With'] = req.headers['x-requested-with'];
+    if (req.headers['x-same-domain']) headers['X-Same-Domain'] = req.headers['x-same-domain'];
     if (req.method === 'POST') headers['Content-Type'] =
         req.headers['content-type'] || 'application/x-www-form-urlencoded';
 
     const { res: up, body: buf } = await fetchRaw(target, {
       method:  req.method,
       headers: headers,
-      body:    body || undefined
+      body:    body || undefined,
+      referer: referer
     });
 
     const text = buf.toString('utf8');
@@ -285,7 +525,7 @@ async function handleProxy(req, res, parsed){
     }
 
     const ct = up.headers['content-type'] || 'text/html; charset=utf-8';
-    cacheSet(key, { contentType: ct, bodyB64: buf.toString('base64') });
+    if (!noCache) cacheSet(key, { contentType: ct, bodyB64: buf.toString('base64') });
 
     res.writeHead(200, safeHeaders(Object.assign({
       'Content-Type': ct,
@@ -307,17 +547,66 @@ async function handleProxy(req, res, parsed){
  *   CANCELA upstream se o cliente desconectar (corrige loop ao seek).
  */
 async function handleStream(req, res, parsed){
-  const target = parsed.query.url;
-  if (!target || !/^https?:\/\//i.test(target)){
+  if(req.method!=='GET'){
+    res.writeHead(405,safeHeaders(Object.assign({'Allow':'GET'},CORS_HEADERS)));return res.end('Metodo nao permitido');
+  }
+  const targetUrl=allowedExternalUrl(parsed.query.url);
+  if (!targetUrl){
     res.writeHead(400, safeHeaders(CORS_HEADERS)); return res.end('Param "url" inválido');
   }
+  const target=targetUrl.toString();
 
-  const isPlaylist = /\.m3u8(\?|$)/i.test(target);
+  const refererUrl=allowedExternalUrl(parsed.query.referer);
+  const referer=refererUrl?refererUrl.toString():undefined;
+  const isPlaylist = /\.m3u8(?:\?|$)/i.test(target);
+  const isDashManifest = /\.mpd(?:\?|$)/i.test(target);
+
+  // ===== Manifesto MPEG-DASH =====
+  if (isDashManifest){
+    try{
+      const { res: up, body: buf } = await fetchRaw(target, { referer });
+      if (up.statusCode >= 400){
+        res.writeHead(up.statusCode, safeHeaders(CORS_HEADERS));
+        return res.end('Upstream HTTP ' + up.statusCode);
+      }
+      const baseUrl = new URL(target);
+      let segmentBase = baseUrl;
+      const declaredBase = buf.toString('utf8').match(/<BaseURL[^>]*>([^<]+)<\/BaseURL>/i);
+      if (declaredBase) {
+        try { segmentBase = new URL(declaredBase[1].trim().replace(/&amp;/gi, '&'), baseUrl); } catch(e){}
+      }
+      const route = (value, from) => {
+        if (!value || /^(?:data:|urn:|#)/i.test(value)) return value;
+        const absolute = new URL(String(value).replace(/&amp;/gi, '&'), from || segmentBase).toString();
+        // Os marcadores $Number$, $Time$ e $RepresentationID$ precisam ficar
+        // visíveis ao dash.js antes de a URL chegar ao servidor.
+        return ('/stream?url=' + encodeURIComponent(absolute).replace(/%24/gi, '$') +
+          (referer ? '&referer=' + encodeURIComponent(referer) : '')).replace(/&/g, '&amp;');
+      };
+      let xml = buf.toString('utf8');
+      xml = xml.replace(/<(BaseURL)([^>]*)>([^<]+)<\/BaseURL>/gi,
+        (match, tag, attrs, value) => '<' + tag + attrs + '>' + route(value.trim(), baseUrl) + '</BaseURL>');
+      xml = xml.replace(/\b(media|initialization|sourceURL|href)=(['"])([^'"]+)\2/gi,
+        (match, name, quote, value) => name + '=' + quote + route(value) + quote);
+      res.writeHead(200, safeHeaders(Object.assign({
+        'Content-Type': 'application/dash+xml; charset=utf-8',
+        'Cache-Control': 'no-store'
+      }, CORS_HEADERS)));
+      return res.end(xml);
+    }catch(e){
+      log('mpd err', target, e.message);
+      if (!res.headersSent){
+        res.writeHead(502, safeHeaders(CORS_HEADERS));
+        res.end('Manifesto DASH falhou: ' + e.message);
+      }
+      return;
+    }
+  }
 
   // ===== Playlist HLS =====
   if (isPlaylist){
     try{
-      const { res: up, body: buf } = await fetchRaw(target);
+      const { res: up, body: buf } = await fetchRaw(target, { referer });
       if (up.statusCode >= 400){
         res.writeHead(up.statusCode, safeHeaders(CORS_HEADERS));
         return res.end('Upstream HTTP ' + up.statusCode);
@@ -329,11 +618,13 @@ async function handleStream(req, res, parsed){
         if (!t || t.startsWith('#')){
           return line.replace(/URI="([^"]+)"/g, (m, u) => {
             const abs = new URL(u, baseUrl).toString();
-            return 'URI="/stream?url=' + encodeURIComponent(abs) + '"';
+            return 'URI="/stream?url=' + encodeURIComponent(abs) +
+              (referer ? '&referer=' + encodeURIComponent(referer) : '') + '"';
           });
         }
         const abs = new URL(t, baseUrl).toString();
-        return '/stream?url=' + encodeURIComponent(abs);
+        return '/stream?url=' + encodeURIComponent(abs) +
+          (referer ? '&referer=' + encodeURIComponent(referer) : '');
       }).join('\n');
 
       res.writeHead(200, safeHeaders(Object.assign({
@@ -363,11 +654,14 @@ async function handleStream(req, res, parsed){
     try { if (upResRef) upResRef.destroy(); } catch(e){}
     try { if (upReqRef) upReqRef.destroy(); } catch(e){}
   };
-  req.on('close', onClientClose);
+  req.on('close', () => { if (!req.complete) onClientClose(); });
   res.on('close', onClientClose);
 
   try{
-    const { upReq, upRes } = await streamUpstream(target, { range: req.headers.range });
+    const { upReq, upRes } = await streamUpstream(target, {
+      range: req.headers.range,
+      referer
+    });
     upReqRef = upReq;
     upResRef = upRes;
 
@@ -417,17 +711,31 @@ async function handleStream(req, res, parsed){
 
 /* Estáticos */
 function serveStatic(req, res, pathname){
-  let file = pathname === '/' ? '/index.html' : pathname;
-  if (file.includes('..')) { res.writeHead(400); return res.end('Bad path'); }
-  const full = path.join(PUBLIC_DIR, file);
+  const route = String(pathname || '/').replace(/\/{2,}/g, '/');
+  const aliases = {
+    '/':'/index.html','/home':'/index.html','/index':'/index.html','/index.html/':'/index.html',
+    '/login':'/login.html','/login/':'/login.html','/login.html/':'/login.html',
+    '/perfis':'/perfis.html','/perfis/':'/perfis.html','/perfis.html/':'/perfis.html',
+    '/detalhes':'/detalhes.html','/detalhes/':'/detalhes.html','/detalhes.html/':'/detalhes.html',
+    '/player-animes':'/player-animes.html','/player-animes/':'/player-animes.html','/player-animes.html/':'/player-animes.html',
+    '/chat':'/chat.html','/chat/':'/chat.html','/chat.html/':'/chat.html',
+    '/admin':'/admin.html','/admin/':'/admin.html','/admin.html/':'/admin.html'
+  };
+  let file = aliases[route.toLowerCase()] || route;
+  let full;
+  try{full=path.resolve(PUBLIC_DIR,'.'+decodeURIComponent(file));}catch(error){res.writeHead(400);return res.end('Bad path');}
+  if(full!==PUBLIC_DIR&&!full.startsWith(PUBLIC_DIR+path.sep)){res.writeHead(400);return res.end('Bad path');}
   fs.stat(full, (err, st) => {
     if (err || !st.isFile()){
       res.writeHead(404, safeHeaders({'Content-Type':'text/html; charset=utf-8'}));
-      return res.end('<h1>404</h1><p>Arquivo não encontrado: ' + file + '</p>');
+      return res.end('<h1>404</h1><p>Arquivo não encontrado.</p>');
     }
+    const extension = path.extname(full).toLowerCase();
     res.writeHead(200, safeHeaders({
       'Content-Type': MIME[path.extname(full).toLowerCase()] || 'application/octet-stream',
-      'Cache-Control': 'public, max-age=300'
+      'Cache-Control': extension === '.html'
+        ? 'no-store, no-cache, must-revalidate'
+        : 'public, max-age=300, must-revalidate'
     }));
     fs.createReadStream(full).pipe(res);
   });
@@ -435,16 +743,50 @@ function serveStatic(req, res, pathname){
 
 /* -------------------- server -------------------- */
 
-const server = http.createServer(async (req, res) => {
-  const parsed = url.parse(req.url, true);
+async function handleRequest(req, res) {
+  let requestedUrl;
+  try {
+    requestedUrl = new URL(String(req.url || '/'), 'http://localhost');
+  } catch (error) {
+    res.writeHead(400, safeHeaders({'Content-Type':'application/json; charset=utf-8'}));
+    return res.end(JSON.stringify({error:'URL inválida'}));
+  }
+  const parsed = {
+    pathname:requestedUrl.pathname,
+    query:Object.fromEntries(requestedUrl.searchParams.entries())
+  };
+
+  // Upstream documents must never execute as this site's origin. This does
+  // not change fetch()/media responses consumed by the application.
+  if (['/proxy','/api/proxy','/stream'].includes(parsed.pathname)) {
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  }
 
   if (req.method === 'OPTIONS'){
     res.writeHead(204, safeHeaders(CORS_HEADERS)); return res.end();
   }
 
-  // Loga só o essencial (não polui com TS de HLS)
-  if (!/\/stream\?.*\.ts/i.test(req.url)) log(req.method, req.url.slice(0, 140));
+  if (parsed.pathname === '/api/proxy') {
+    req.query = parsed.query;
+    if (req.method === 'POST') req.body = await readBody(req);
+    return require('./api/proxy')(req,res);
+  }
+  const aiRoute = parsed.pathname.match(/^\/api\/ai\/(episode|anime|recommendations)$/);
+  if (aiRoute) {
+    req.query = Object.assign({},parsed.query,{mode:aiRoute[1]});
+    if (req.method === 'POST') req.body = await readBody(req,128*1024);
+    Object.entries(safeHeaders({})).forEach(([key,value]) => res.setHeader(key,value));
+    res.status = code => { res.statusCode=code; return res; };
+    res.json = value => res.end(JSON.stringify(value));
+    return require('./api/ai/[mode]')(req,res);
+  }
 
+  // Loga só o essencial (não polui com TS de HLS)
+  if (parsed.pathname !== '/stream') log(req.method, parsed.pathname.slice(0, 140));
+
+  if (parsed.pathname === '/api/anime-news-image') return handleAnimeNewsImage(req, res, parsed);
+  if (parsed.pathname === '/api/profile-photo') return handleProfilePhotoUpload(req,res);
+  if (parsed.pathname === '/api/anime-news') return handleAnimeNews(req, res);
   if (parsed.pathname === '/proxy')  return handleProxy(req, res, parsed);
   if (parsed.pathname === '/stream') return handleStream(req, res, parsed);
   if (parsed.pathname === '/health'){
@@ -453,18 +795,35 @@ const server = http.createServer(async (req, res) => {
   }
 
   serveStatic(req, res, parsed.pathname);
+}
+const server = http.createServer((req,res) => {
+  handleRequest(req,res).catch(error => {
+    log('request failed',Number(error.statusCode)||500);
+    if (!res.headersSent) sendJson(res,error.statusCode||500,{ok:false,error:error.statusCode?error.message:'Falha interna.'});
+    else res.end();
+  });
 });
 
 // Evita derrubar o processo por erros de socket
 server.on('clientError', (err, socket) => {
   try { socket.destroy(); } catch(e){}
 });
+server.on('error', error => {
+  if (error && error.code === 'EADDRINUSE') {
+    log('A porta ' + PORT + ' já está em uso. O servidor provavelmente já está aberto.');
+    log('Use a janela que já está rodando e acesse http://localhost:' + PORT);
+    process.exitCode = 1;
+    return;
+  }
+  log('Falha ao iniciar o servidor:', error && error.message || error);
+  process.exitCode = 1;
+});
 process.on('uncaughtException', (e) => log('uncaught', e.message));
 process.on('unhandledRejection', (e) => log('unhandled', e && e.message || e));
 
 server.listen(PORT, HOST, () => {
   log('====================================================');
-  log(' DRAKSYON server v2 rodando em http://' + HOST + ':' + PORT);
+  log(' DRAKSYON server v2 rodando em http://' + HOST + ':' + server.address().port);
   log(' Abra no navegador:  http://localhost:' + PORT);
   log(' Cache em disco:    ' + CACHE_DIR);
   log('====================================================');

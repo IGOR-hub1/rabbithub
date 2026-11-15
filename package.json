@@ -1,11 +1,19 @@
 {
   "name": "draksyon",
   "version": "1.0.0",
-  "description": "Draksyon — site de animes com servidor proxy local (corrige ERR_BLOCKED_BY_RESPONSE / CORP).",
   "private": true,
+  "description": "Servidor local do X-Bunny Animes",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "check": "node --check server.js",
+    "build": "node scripts/build.mjs",
+    "test:ui": "node scripts/ui-regression.mjs",
+    "test:history": "node scripts/history-browser.mjs",
+    "test": "node --test scripts/*.test.js",
+    "security:preflight": "node scripts/security-preflight.mjs"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }

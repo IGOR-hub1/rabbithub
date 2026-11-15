@@ -1,49 +1,30 @@
-# Draksyon — Alterações (modo teste sem Firebase Authentication)
+# X-Bunny Animes — estado atual
 
-## O que mudou nesta versão
+## Correções de interface — 02/11/2026
 
-O **Firebase Authentication foi removido**. Os usuários agora ficam
-registrados **apenas no Realtime Database**, em `users/{uid}`.
+- A barra lateral do desktop permanece fixa durante a rolagem.
+- O layout desktop é definido antes da primeira pintura, sem piscar o botão de menu mobile.
+- A logo do tema é aplicada enquanto o HTML é criado, evitando a troca visual tardia.
+- O avatar compartilhado reconhece `profileAvatar` da sessão e do usuário autenticado.
+- Dropdowns abrem junto ao gatilho, usam a altura real da lista e permanecem abertos ao rolar as próprias opções.
+- A animação de entrada deixou de transformar o `body`, preservando todos os elementos fixos e clicáveis.
+- O teste `scripts/ui-regression.mjs` valida esses comportamentos em Chromium nas larguras desktop e mobile.
+- O servidor local agora interpreta requisições com a API WHATWG `URL`, removendo o uso obsoleto de `url.parse()`.
 
-- `uid` = e-mail normalizado (letras minúsculas, caracteres não alfanuméricos viram `_`).
-- A senha é armazenada como `passwordHash` (SHA-256).
-- A sessão do usuário fica em `localStorage.dk_session = {uid,email,displayName}`.
+## Firebase
 
-> Aviso importante: sem o Authentication real, as senhas ficam **no banco em
-> hash SHA-256**, e a segurança depende apenas das regras do Realtime DB
-> e do código do cliente. Use somente como teste.
+- Firebase Authentication por e-mail e senha está ativo.
+- Contas ficam em `users/{firebaseAuthUid}` no Realtime Database.
+- Chat, perfis públicos e notificações usam o mesmo projeto `animes-64408`, sob `rhSocialV1`.
+- O projeto não usa Firebase Storage; banners guardam somente links HTTPS.
+- As regras de produção estão em `API ANIMES E CHAT/database.rules.json`.
 
-## Arquivos alterados
+Nunca publique regras globais com `".read": true` e `".write": true`. Isso permitiria que qualquer visitante alterasse contas, planos e configurações administrativas.
 
-| Arquivo | Mudança |
-|---|---|
-| `login.html` | Cadastro/entrada agora gravam e leem `users/{uid}` no DB. "Esqueci a senha" pede uma nova senha e a grava diretamente. |
-| `auth-guard.js` | Não usa mais `firebase.auth()`. Verifica sessão no localStorage e o campo `banned` no DB. |
-| `perfis.html` | Lê o UID da sessão em vez do Authentication. Perfis continuam sincronizando em `users/{uid}/profiles`. |
-| `admin.html` | Painel funcional sem Auth. Ações: banir/desbanir, redefinir senha (grava novo hash), apagar conta (`remove()` do nó do usuário). |
-| `dk-auth-shim.js` (novo) | Emula `firebase.auth()` a partir da sessão para manter compatíveis os módulos `dk-notice`, `dk-realtime`, `site-integration`, `site-status` etc. sem alterar seu código. |
-| `index.html`, `detalhes.html`, `player-animes.html` | Trocaram `firebase-auth-compat.js` por `dk-auth-shim.js`. |
+## Painel
 
-## Regras sugeridas do Realtime Database (modo teste)
+O painel reconhece `/admins/UID = true`, `users/UID/isAdmin = true` ou `users/UID/role = "admin"`. Em localhost a interface pode ser aberta sem a verificação visual, mas as escritas online continuam protegidas pelas regras do Firebase.
 
-```json
-{
-  "rules": {
-    ".read": true,
-    ".write": true
-  }
-}
-```
+## Publicação
 
-Em produção você precisará restringir; sem Authentication não há `auth.uid`
-disponível nas regras.
-
-## Fluxo resumido
-
-1. Usuário cria conta em `login.html` → registro em `users/{uid}` com
-   `passwordHash` e `banned=false`.
-2. Login checa hash, checa `banned`, grava `dk_session` no localStorage.
-3. `auth-guard.js` roda em cada página, revalida `banned` no DB e redireciona
-   se necessário.
-4. `perfis.html` sincroniza a lista de perfis em `users/{uid}/profiles`.
-5. `admin.html` (sem login) gerencia todos os usuários.
+Consulte `FIREBASE-PUBLISH.md` para publicar as regras e `FIREBASE-PATHS.md` para conferir o mapa de todas as dependências.
