@@ -1,0 +1,310 @@
+/*
+ * X-Bunny Animes - camada responsiva central
+ *
+ * Este arquivo e carregado por ultimo em todas as paginas. Ele concentra as
+ * garantias estruturais que precisam ser iguais no celular, tablet, desktop e
+ * TV, sem substituir o desenho especifico de cada tela.
+ */
+
+:root {
+  --viewport-inline-gutter: clamp(14px, 3vw, 40px);
+  --viewport-content-max: 1200px;
+  --viewport-safe-top: env(safe-area-inset-top, 0px);
+  --viewport-safe-right: env(safe-area-inset-right, 0px);
+  --viewport-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --viewport-safe-left: env(safe-area-inset-left, 0px);
+  --viewport-control-min: 42px;
+}
+
+html {
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@supports (overflow: clip) {
+  html { overflow-x: clip; }
+}
+
+body {
+  width: 100%;
+  min-width: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+@supports (overflow: clip) {
+  body { overflow-x: clip; }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+img, svg, canvas { max-width: 100%; }
+img { height: auto; }
+video, iframe { max-width: 100%; }
+
+button, input, select, textarea { max-width: 100%; font: inherit; }
+button, [role="button"], a, input, select, textarea { touch-action: manipulation; }
+
+:where(main, section, article, aside, header, footer, nav, form, div) { min-width: 0; }
+:where(p, h1, h2, h3, h4, h5, h6, label, small, strong, span) { overflow-wrap: break-word; }
+:where([hidden]) { display: none !important; }
+
+:where(dialog, [role="dialog"], .modal, .yc-sheet, .ep-modal, .comments-modal, .dk-modal) {
+  max-width: calc(100vw - var(--viewport-safe-left) - var(--viewport-safe-right));
+  max-height: calc(100dvh - var(--viewport-safe-top) - var(--viewport-safe-bottom));
+}
+
+:where(.modal-body, .yc-sheet-body, .ep-modal-list, .comments-list, .dk-modal-body) {
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+:where(button, [href], input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid rgba(var(--brand-rgb, 37, 75, 255), .92);
+  outline-offset: 3px;
+}
+
+/* Evita que filhos flex/grid longos forcem rolagem lateral. */
+body[data-page="home"] :where(.main-content, .hero-content, .anime-section, .yc-sheet-body),
+body[data-page="details"] :where(.hero-content, .main-content, .ep-list),
+body[data-page="player"] :where(.info-card, .info-card-body, .video-shell, .video-wrapper),
+body[data-page="profiles"] :where(.container, .grid, .modal),
+body[data-page="login"] :where(.auth-shell, .auth-area, .auth-panel, .auth-card),
+body[data-page="chat"] :where(.chat-page, .chat-inbox, .notification-reference-screen),
+body[data-page="admin"] :where(.main, .content, .panel, .panel-body) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+body[data-page="player"] .video-wrapper :where(video, iframe) {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+
+body[data-page="admin"] :where(.user-table, .settings-index),
+body[data-page="chat"] .chat-filters {
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Celulares pequenos: 320 a 380 px. */
+@media (max-width: 380px) {
+  :root {
+    --viewport-inline-gutter: max(11px, var(--viewport-safe-left));
+    --viewport-control-min: 44px;
+  }
+
+  body { font-size: 14px; }
+
+  :where(button, [role="button"], input, select) { min-height: var(--viewport-control-min); }
+
+  body[data-page="home"] .main-content,
+  body[data-page="details"] .main-content,
+  body[data-page="chat"] .chat-page,
+  body[data-page="admin"] .content {
+    padding-right: max(11px, var(--viewport-safe-right)) !important;
+    padding-left: max(11px, var(--viewport-safe-left)) !important;
+  }
+
+  body[data-page="login"] .auth-area { padding-inline: max(11px, var(--viewport-safe-left)) !important; }
+  body[data-page="login"] .auth-card { padding-inline: 16px !important; }
+
+  body[data-page="player"] .ep-item { grid-template-columns: 96px minmax(0, 1fr) !important; }
+
+  body[data-page="admin"] :where(.kpi-grid, .users-summary) { grid-template-columns: 1fr !important; }
+  body[data-page="admin"] .users-summary > div:nth-child(5) { grid-column: auto !important; }
+  body[data-page="admin"] .page-head :where(.btn, button) { width: 100%; }
+}
+
+/* Celular e tablet estreito. */
+@media (max-width: 760px) {
+  :root {
+    --viewport-inline-gutter: clamp(12px, 4vw, 22px);
+    --viewport-control-min: 44px;
+  }
+
+  :where(button, [role="button"], input, select) { min-height: var(--viewport-control-min); }
+
+  body[data-page="home"] .main-content,
+  body[data-page="details"] .main-content,
+  body[data-page="chat"] .chat-page,
+  body[data-page="admin"] .content {
+    width: 100%;
+    padding-right: max(var(--viewport-inline-gutter), var(--viewport-safe-right));
+    padding-left: max(var(--viewport-inline-gutter), var(--viewport-safe-left));
+  }
+
+  body[data-page="home"] :where(.history-grid, .watchlist-grid, .cat-grid, .scraper-list),
+  body[data-page="details"] :where(.ep-list, .season-options) {
+    min-width: 0;
+  }
+
+  body[data-page="player"] .video-shell { width: 100%; }
+  body[data-page="player"] .video-wrapper { border-radius: clamp(0px, 3vw, 16px); }
+  body[data-page="player"] .dk-player-controls { padding-bottom: max(10px, var(--viewport-safe-bottom)); }
+
+  body[data-page="profiles"] :where(.container, .modal) {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  body[data-page="login"] .auth-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-bottom: var(--viewport-safe-bottom);
+  }
+
+  body[data-page="login"] :where(.auth-area, .auth-panel, .auth-card) { width: 100%; }
+
+  body[data-page="chat"] .chat-inbox-head { min-width: 0; }
+  body[data-page="chat"] .chat-filters { width: 100%; }
+
+  body[data-page="admin"] .content { padding-bottom: calc(34px + var(--viewport-safe-bottom)); }
+  body[data-page="admin"] :where(.grid-2, .message-layout, .curation-layout, .settings-grid, .banner-upload, .sponsor-upload) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body[data-page="admin"] :where(.toolbar, .filter-actions, .banner-catalog-toolbar) {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+  body[data-page="admin"] .user-table-panel {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+  body[data-page="admin"] .settings-index {
+    max-width: 100%;
+    padding-bottom: 5px;
+    scroll-snap-type: x proximity;
+  }
+  body[data-page="admin"] .settings-index button { scroll-snap-align: start; }
+}
+
+/* Celulares deitados e telas com pouca altura. */
+@media (max-height: 520px) and (orientation: landscape) {
+  body[data-page="login"] .auth-shell { align-items: flex-start; overflow-y: auto; }
+  body[data-page="login"] .auth-area { min-height: auto; padding-block: 12px; }
+  body[data-page="player"] .video-wrapper { max-height: calc(100dvh - var(--viewport-safe-top) - var(--viewport-safe-bottom)); }
+  body[data-page="player"] :where(.ep-modal, .comments-modal) { height: calc(100dvh - 16px) !important; max-height: calc(100dvh - 16px) !important; }
+  body[data-page="profiles"] :where(.overlay, .modal) { max-height: calc(100dvh - 12px); }
+}
+
+/* Tablets: a estrutura cresce, sem antecipar o layout largo de desktop. */
+@media (min-width: 761px) and (max-width: 1099px) {
+  :root { --viewport-inline-gutter: clamp(22px, 4vw, 38px); }
+
+  body[data-page="home"] .main-content,
+  body[data-page="details"] .main-content,
+  body[data-page="chat"] .chat-page,
+  body[data-page="admin"] .content {
+    width: 100%;
+    padding-right: max(var(--viewport-inline-gutter), var(--viewport-safe-right));
+    padding-left: max(var(--viewport-inline-gutter), var(--viewport-safe-left));
+  }
+
+  body[data-page="admin"] :where(.grid-2, .message-layout, .curation-layout, .settings-grid) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  body[data-page="admin"] .banner-upload { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  body[data-page="admin"] .banner-upload > .btn { align-self: end; }
+}
+
+/* Notebooks e desktops comuns. */
+@media (min-width: 1100px) {
+  :root {
+    --viewport-inline-gutter: clamp(28px, 3vw, 52px);
+    --viewport-content-max: 1320px;
+  }
+
+  body[data-page="home"] .main-content,
+  body[data-page="details"] .main-content,
+  body[data-page="chat"] .chat-page {
+    width: min(100%, var(--viewport-content-max));
+  }
+
+  body[data-page="admin"] .content { width: min(100%, 1320px); }
+}
+
+/* Monitores Full HD, ultrawide e TVs: limita o comprimento das linhas e
+   aumenta alvos/legibilidade sem esticar os cartoes indefinidamente. */
+@media (min-width: 1920px) {
+  :root {
+    --viewport-inline-gutter: clamp(48px, 4vw, 96px);
+    --viewport-content-max: 1760px;
+    --viewport-control-min: 48px;
+  }
+
+  body { font-size: clamp(15px, .82vw, 18px); }
+
+  body[data-page="home"] .main-content,
+  body[data-page="details"] .main-content { max-width: var(--viewport-content-max) !important; }
+  body[data-page="home"] .hero-content { padding-inline: var(--viewport-inline-gutter); }
+  body[data-page="details"] .hero-content { max-width: min(44vw, 820px); }
+
+  body[data-page="player"] :where(.info-card-body, .anime-mini-row, .video-shell) {
+    max-width: min(1760px, calc(100vw - 2 * var(--viewport-inline-gutter))) !important;
+  }
+  body[data-page="player"] .video-wrapper { max-height: min(74dvh, 1080px); }
+
+  body[data-page="chat"] .chat-page { width: min(1120px, calc(100vw - 2 * var(--viewport-inline-gutter))); }
+  body[data-page="profiles"] .container { width: min(1440px, calc(100vw - 2 * var(--viewport-inline-gutter))); }
+  body[data-page="login"] .auth-panel { width: min(560px, 100%); }
+
+  body[data-page="admin"] { --sidebar: clamp(268px, 15vw, 330px); }
+  body[data-page="admin"] .content { width: min(1800px, calc(100vw - var(--sidebar) - 2 * var(--viewport-inline-gutter))); max-width: 1800px; }
+  body[data-page="admin"] .kpi-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  body[data-page="admin"] .settings-index { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+}
+
+/* TVs e dispositivos controlados por setas/controle remoto. */
+@media (min-width: 1280px) and (hover: none),
+       (min-width: 1280px) and (pointer: coarse) {
+  :root {
+    --viewport-inline-gutter: clamp(40px, 4vw, 92px);
+    --viewport-control-min: 52px;
+  }
+
+  body { font-size: clamp(16px, 1.05vw, 21px); }
+
+  :where(button, [role="button"], input, select, a.btn, .btn) { min-height: var(--viewport-control-min); }
+
+  :where(button, [href], input, select, textarea, [tabindex]):focus-visible {
+    outline-width: 4px;
+    outline-color: #fff;
+    outline-offset: 5px;
+    box-shadow: 0 0 0 8px rgba(var(--brand-rgb, 37, 75, 255), .72);
+  }
+
+  :where(button, [href], input, select, textarea, [tabindex]) { scroll-margin: 12vh 7vw; }
+
+  body[data-page="home"] .main-content,
+  body[data-page="details"] .main-content,
+  body[data-page="chat"] .chat-page {
+    padding-right: max(var(--viewport-inline-gutter), var(--viewport-safe-right));
+    padding-left: max(var(--viewport-inline-gutter), var(--viewport-safe-left));
+  }
+
+  body[data-page="player"] .dk-player-controls { opacity: 1; }
+  body[data-page="player"] .dk-control-button { min-width: 52px; min-height: 52px; }
+
+  body[data-page="admin"] .content {
+    padding-right: max(var(--viewport-inline-gutter), var(--viewport-safe-right));
+    padding-left: max(var(--viewport-inline-gutter), var(--viewport-safe-left));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto !important; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
