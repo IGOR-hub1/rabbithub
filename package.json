@@ -9,6 +9,7 @@
     "check": "node --check server.js",
     "build": "node scripts/build.mjs",
     "test:ui": "node scripts/ui-regression.mjs",
+    "test:affiliate:deploy": "node scripts/affiliate-deploy-smoke.mjs",
     "test:history": "node scripts/history-browser.mjs",
     "test": "node --test scripts/*.test.js",
     "security:preflight": "node scripts/security-preflight.mjs"

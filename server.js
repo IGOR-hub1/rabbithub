@@ -43,6 +43,8 @@ function loadLocalEnv(){
 loadLocalEnv();
 const R2Profile = require('./lib/r2-profile');
 const {verifyFirebaseRequest} = require('./lib/firebase-auth');
+const {createService: createAffiliateService} = require('./lib/affiliate-service');
+let affiliateService;
 
 const PORT       = process.env.PORT || 8080;
 const HOST       = process.env.HOST || '0.0.0.0';
@@ -710,6 +712,16 @@ async function handleStream(req, res, parsed){
 }
 
 /* Estáticos */
+function sendErrorDocument(res, status){
+  fs.readFile(path.join(PUBLIC_DIR,'404.html'),'utf8',(error,html)=>{
+    if(error){
+      res.writeHead(status,safeHeaders({'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}));
+      return res.end(status===404?'Página não encontrada.':'Erro interno.');
+    }
+    res.writeHead(status,safeHeaders({'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'}));
+    res.end(status===404?html:html.replace('data-error-code="404"','data-error-code="'+status+'"'));
+  });
+}
 function serveStatic(req, res, pathname){
   const route = String(pathname || '/').replace(/\/{2,}/g, '/');
   const aliases = {
@@ -727,8 +739,11 @@ function serveStatic(req, res, pathname){
   if(full!==PUBLIC_DIR&&!full.startsWith(PUBLIC_DIR+path.sep)){res.writeHead(400);return res.end('Bad path');}
   fs.stat(full, (err, st) => {
     if (err || !st.isFile()){
-      res.writeHead(404, safeHeaders({'Content-Type':'text/html; charset=utf-8'}));
-      return res.end('<h1>404</h1><p>Arquivo não encontrado.</p>');
+      if((req.method==='GET'||req.method==='HEAD') && (!path.extname(route)||path.extname(route).toLowerCase()==='.html') && !route.startsWith('/api/')){
+        return sendErrorDocument(res,404);
+      }
+      res.writeHead(404, safeHeaders({'Content-Type':'text/plain; charset=utf-8','Cache-Control':'no-store'}));
+      return res.end('Arquivo não encontrado.');
     }
     const extension = path.extname(full).toLowerCase();
     res.writeHead(200, safeHeaders({
@@ -771,6 +786,25 @@ async function handleRequest(req, res) {
     if (req.method === 'POST') req.body = await readBody(req);
     return require('./api/proxy')(req,res);
   }
+  if (parsed.pathname.startsWith('/api/affiliates/')) {
+    const action=parsed.pathname.slice('/api/affiliates/'.length);
+    const methods={list:'GET',adminData:'POST',create:'POST',status:'POST',link:'POST',myLink:'POST',linkUpdate:'POST',campaignUpdate:'POST',partnerRules:'POST',financialAction:'POST',recordPurchase:'POST',settle:'POST',report:'POST',payout:'POST',settings:'POST',simulationTestAccount:'POST',simulationUsers:'POST',simulationStart:'POST',simulationPurchase:'POST',simulationClear:'POST',click:'POST',claim:'POST',conversion:'POST'};
+    if (!methods[action]) return sendJson(res,404,{ok:false,error:'Rota não encontrada.'});
+    if (req.method!==methods[action]) return sendJson(res,405,{ok:false,error:'Método não permitido.'});
+    let body={};
+    if(req.method==='POST'){try{const supplied=req.body;const raw=supplied===undefined?await readBody(req,4096):Buffer.isBuffer(supplied)?supplied.toString('utf8'):typeof supplied==='string'?supplied:JSON.stringify(supplied);if(Buffer.byteLength(raw||'')>4096)return sendJson(res,413,{ok:false,error:'Solicitação muito grande.'});body=JSON.parse(raw||'{}');}catch(error){if(error.statusCode)throw error;return sendJson(res,400,{ok:false,error:'JSON inválido.'});}}
+    if(action!=='click'&&!/^Bearer\s+\S+/i.test(String(req.headers.authorization||'')))return sendJson(res,401,{ok:false,error:'Autenticação obrigatória.'});
+    if(action==='click'&&body.consent!==true)return sendJson(res,403,{ok:false,error:'Consentimento necessário.'});
+    if (!affiliateService) affiliateService=createAffiliateService();
+    let result;
+    if (action==='click') {
+      const cookie=String(req.headers.cookie||'').match(/(?:^|;\s*)rh_aff_visitor=([A-Za-z0-9_-]{24,80})(?:;|$)/);
+      const visitorId=cookie?cookie[1]:crypto.randomBytes(18).toString('base64url');
+      result=await affiliateService.click(body,visitorId);
+      if(!cookie)res.setHeader('Set-Cookie','rh_aff_visitor='+visitorId+'; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly'+(req.socket.encrypted||req.headers['x-forwarded-proto']==='https'?'; Secure':''));
+    } else result=await affiliateService[action](req,body);
+    return sendJson(res,200,{ok:true,...(Array.isArray(result)?{partners:result}:result)});
+  }
   const aiRoute = parsed.pathname.match(/^\/api\/ai\/(episode|anime|recommendations)$/);
   if (aiRoute) {
     req.query = Object.assign({},parsed.query,{mode:aiRoute[1]});
@@ -799,7 +833,8 @@ async function handleRequest(req, res) {
 const server = http.createServer((req,res) => {
   handleRequest(req,res).catch(error => {
     log('request failed',Number(error.statusCode)||500);
-    if (!res.headersSent) sendJson(res,error.statusCode||500,{ok:false,error:error.statusCode?error.message:'Falha interna.'});
+    if (!res.headersSent && req.method==='GET' && /text\/html/i.test(String(req.headers.accept||'')) && Number(error.statusCode||500)>=500 && !String(req.url||'').startsWith('/api/')) sendErrorDocument(res,Number(error.statusCode)||500);
+    else if (!res.headersSent) sendJson(res,error.statusCode||500,{ok:false,error:error.statusCode?error.message:'Falha interna.'});
     else res.end();
   });
 });
@@ -821,10 +856,11 @@ server.on('error', error => {
 process.on('uncaughtException', (e) => log('uncaught', e.message));
 process.on('unhandledRejection', (e) => log('unhandled', e && e.message || e));
 
-server.listen(PORT, HOST, () => {
+if (require.main === module) server.listen(PORT, HOST, () => {
   log('====================================================');
   log(' DRAKSYON server v2 rodando em http://' + HOST + ':' + server.address().port);
   log(' Abra no navegador:  http://localhost:' + PORT);
   log(' Cache em disco:    ' + CACHE_DIR);
   log('====================================================');
 });
+module.exports = server;
