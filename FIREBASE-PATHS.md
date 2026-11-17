@@ -82,5 +82,5 @@ Histórico e progresso são privados e disponíveis para Free e VIP. Os caminhos
 
 As regras atualizadas devem ser publicadas **antes** das APIs e do frontend que usam esse caminho. Sem isso, as novas consultas de autorizacao falham de modo fechado. A geracao local pode ser reproduzida com `node scripts/harden-session-rules.cjs`; esse comando nao publica regras nem modifica dados.
 
-Publique `API ANIMES E CHAT/database.rules.json`, `storage.rules` e `firestore.rules` pelo `firebase.json` no projeto `animes-64408`. Não use estas regras no projeto antigo `chat-4c99e`.
+Publique somente `API ANIMES E CHAT/database.rules.json` com `firebase deploy --only database --project animes-64408`. O `firebase.json` inclui apenas o Realtime Database. `storage.rules` e `firestore.rules` permanecem no repositório, sem fazer parte do deploy e sem exigir ativação dos respectivos serviços. Não use estas regras no projeto antigo `chat-4c99e`.
 

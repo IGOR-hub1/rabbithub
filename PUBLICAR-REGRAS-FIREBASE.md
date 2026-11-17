@@ -2,6 +2,8 @@
 
 Projeto: **animes-64408**. Banco principal: **animes-64408-default-rtdb**.
 
+Para publicar somente essas regras pela Firebase CLI, execute na raiz do repositório `firebase deploy --only database --project animes-64408`. O `firebase.json` não inclui Firestore, Storage ou Cloud Functions. As etapas pelo Console abaixo são uma alternativa. Para a implantação completa dos afiliados com a Vercel, consulte [AFILIADOS-IMPLANTACAO.md](AFILIADOS-IMPLANTACAO.md).
+
 ## 1. Realtime Database: regras utilizadas pelo site e pelo admin
 
 1. Abra o projeto no Console Firebase.
@@ -51,7 +53,7 @@ O fluxo atual usa Realtime Database. Os uploads de perfil usam o backend R2, nã
 - [firestore.rules](firestore.rules): cole somente em **Firestore Database → Regras**, caso esse serviço esteja habilitado.
 - [storage.rules](storage.rules): cole somente em **Storage → Regras**, caso esse serviço esteja habilitado.
 
-Não é necessário habilitar esses serviços para corrigir o Realtime Database. Não cole o JSON do Realtime Database nos editores de Firestore ou Storage. `firebase.json` já aponta para os três arquivos corretos.
+Não é necessário habilitar esses serviços para corrigir o Realtime Database. Não cole o JSON do Realtime Database nos editores de Firestore ou Storage. `firebase.json` aponta somente para `API ANIMES E CHAT/database.rules.json`; os outros dois arquivos permanecem como referência.
 
 ## 4. Conferência após publicar
 
