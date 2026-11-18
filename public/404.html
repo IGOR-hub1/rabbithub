@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#0d0d0f">
+  <title>404 — Página não encontrada | X-Bunny Animes</title>
+  <link rel="icon" href="img/logo-purple.jpg" type="image/jpeg">
+  <link rel="stylesheet" href="app-refresh.css?v=20261116-2">
+  <style>
+    :root{color-scheme:dark;--bg:#0d0d0f;--app-panel:#151518;--app-line:rgba(255,255,255,.085);--brand-rgb:141,64,232;--brand-light:#b980fa;--brand-soft:rgba(141,64,232,.13)}
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{min-height:100%;margin:0}
+    body[data-page="home"]{display:grid;place-items:center;min-height:100dvh;padding:24px 16px;background:var(--bg);color:#fff;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+    .error-page{width:min(680px,100%)}
+    .error-brand{display:flex;align-items:center;gap:12px;padding:19px 20px;border-bottom:1px solid var(--app-line)}
+    .error-brand img{display:block;width:42px;height:42px;flex:0 0 auto;object-fit:cover;border:1px solid var(--app-line);border-radius:12px}
+    .error-brand span{color:#f4f2f8;font-size:13px;font-weight:800;letter-spacing:.06em}
+    .error-page .support-reference-head{align-items:flex-start}
+    .error-page .support-reference-head h3{font-size:clamp(20px,4vw,30px);line-height:1.2}
+    .error-page .support-reference-icon{color:#ff858d!important}
+    .error-page .support-reference-copy{max-width:none}
+    .error-actions{display:flex;gap:10px;margin:20px;border-top:1px solid var(--app-line);padding-top:20px}
+    .error-actions a,.error-actions button{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:10px 16px;border:1px solid var(--app-line);border-radius:11px;background:rgba(255,255,255,.045);color:#f4f4f6;font-family:inherit;font-size:13px;font-weight:700;text-decoration:none;cursor:pointer;transition:background .16s,border-color .16s}
+    .error-actions a{border-color:rgba(var(--brand-rgb),.5);background:var(--brand-soft);color:#e7d4ff}
+    .error-actions a:hover,.error-actions button:hover{border-color:rgba(var(--brand-rgb),.65);background:rgba(var(--brand-rgb),.2)}
+    .error-actions :focus-visible{outline:2px solid var(--brand-light);outline-offset:3px}
+    @media(max-width:460px){body[data-page="home"]{padding:16px}.error-brand{padding:16px 15px}.error-actions{flex-direction:column;margin:18px 15px}.error-actions a,.error-actions button{width:100%}}
+  </style>
+</head>
+<body data-page="home" data-error-code="404">
+  <main class="error-page">
+    <section class="support-reference-card" aria-labelledby="error-title">
+      <div class="error-brand"><img src="img/logo-purple.jpg" alt="Logo do X-Bunny Animes" width="42" height="42"><span>X-BUNNY ANIMES</span></div>
+      <div class="support-reference-head">
+        <div class="support-reference-brand">
+          <span class="support-reference-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2.7 19a1.4 1.4 0 0 0 1.2 2h16.2a1.4 1.4 0 0 0 1.2-2L12 3Z"/><path d="M12 9v5m0 3h.01"/></svg>
+          </span>
+          <div><span class="support-reference-kicker">PRECISA DE AJUDA?</span><h3 id="error-title">404 — Página não encontrada</h3></div>
+        </div>
+      </div>
+      <p class="support-reference-copy" id="error-message">Não encontramos esta página. Confira o endereço ou fale com o suporte se precisar de ajuda.</p>
+      <div class="error-actions"><a href="/?tab=perfil&amp;sheet=suporte">Suporte</a><button id="retry-button" type="button">Tentar novamente</button></div>
+    </section>
+  </main>
+  <script>
+    (function(){
+      var messages={
+        '403':['403 — Acesso negado','Você não tem permissão para abrir esta página. Entre na sua conta ou fale com o suporte.'],
+        '500':['Algo deu errado','Ocorreu um erro inesperado ao abrir esta página. Tente novamente em instantes.'],
+        '502':['Serviço indisponível','Não foi possível conectar ao serviço agora. Tente novamente em instantes.'],
+        '503':['Serviço temporariamente indisponível','Estamos com uma instabilidade temporária. Tente novamente em alguns minutos.']
+      };
+      var params=new URLSearchParams(location.search);
+      var code=document.body.getAttribute('data-error-code');
+      if(code==='404'&&messages[params.get('type')])code=params.get('type');
+      if(messages[code]){
+        document.getElementById('error-title').textContent=messages[code][0];
+        document.getElementById('error-message').textContent=messages[code][1];
+        document.title=messages[code][0]+' | X-Bunny Animes';
+      }
+      document.getElementById('retry-button').addEventListener('click',function(){location.reload();});
+    })();
+  </script>
+</body>
+</html>
