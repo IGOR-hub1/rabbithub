@@ -790,10 +790,10 @@ async function handleRequest(req, res) {
     const action=parsed.pathname.slice('/api/affiliates/'.length);
     const methods={list:'GET',adminData:'POST',create:'POST',status:'POST',link:'POST',myLink:'POST',linkUpdate:'POST',campaignUpdate:'POST',partnerRules:'POST',financialAction:'POST',recordPurchase:'POST',settle:'POST',report:'POST',payout:'POST',settings:'POST',simulationTestAccount:'POST',simulationUsers:'POST',simulationStart:'POST',simulationPurchase:'POST',simulationClear:'POST',click:'POST',claim:'POST',conversion:'POST'};
     if (!methods[action]) return sendJson(res,404,{ok:false,error:'Rota não encontrada.'});
+    if(action!=='click'&&!/^Bearer\s+\S+/i.test(String(req.headers.authorization||'')))return sendJson(res,401,{ok:false,error:'Autenticação obrigatória.'});
     if (req.method!==methods[action]) return sendJson(res,405,{ok:false,error:'Método não permitido.'});
     let body={};
     if(req.method==='POST'){try{const supplied=req.body;const raw=supplied===undefined?await readBody(req,4096):Buffer.isBuffer(supplied)?supplied.toString('utf8'):typeof supplied==='string'?supplied:JSON.stringify(supplied);if(Buffer.byteLength(raw||'')>4096)return sendJson(res,413,{ok:false,error:'Solicitação muito grande.'});body=JSON.parse(raw||'{}');}catch(error){if(error.statusCode)throw error;return sendJson(res,400,{ok:false,error:'JSON inválido.'});}}
-    if(action!=='click'&&!/^Bearer\s+\S+/i.test(String(req.headers.authorization||'')))return sendJson(res,401,{ok:false,error:'Autenticação obrigatória.'});
     if(action==='click'&&body.consent!==true)return sendJson(res,403,{ok:false,error:'Consentimento necessário.'});
     if (!affiliateService) affiliateService=createAffiliateService();
     let result;

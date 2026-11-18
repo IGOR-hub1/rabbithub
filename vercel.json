@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "buildCommand": null,
+  "buildCommand": "node scripts/verify-affiliate-deploy.mjs",
   "outputDirectory": "public",
   "functions": {
     "api/affiliates.mjs": { "maxDuration": 30 }
