@@ -236,7 +236,7 @@ test('proxy local exige token e limita destinos externos', () => {
   assert.match(server,/function allowedExternalUrl\(value\)/);
   assert.match(server,/!hostnameAllowed\(parsed\.hostname\)/);
   assert.doesNotMatch(server,/Access-Control-Allow-Origin':\s+'\*'/);
-  assert.match(server,/Arquivo não encontrado\.<\/p>/);
+  assert.match(server,/res\.end\('Arquivo não encontrado\.'\)/);
   assert.doesNotMatch(server,/Arquivo não encontrado:' \+ file/);
   assert.match(server,/log\(req\.method, parsed\.pathname\.slice/);
 });

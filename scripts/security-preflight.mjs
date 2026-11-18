@@ -13,10 +13,16 @@ function read(relative) {
 
 let rules;
 let projectAliases;
+let deployConfig;
 try { rules = JSON.parse(read('API ANIMES E CHAT/database.rules.json')); }
 catch (error) { failures.push('API ANIMES E CHAT/database.rules.json não é um JSON válido: ' + error.message); }
 try { projectAliases = JSON.parse(read('.firebaserc')); }
 catch (error) { failures.push('.firebaserc não é um JSON válido: ' + error.message); }
+try { deployConfig = JSON.parse(read('firebase.json')); }
+catch (error) { failures.push('firebase.json não é um JSON válido: ' + error.message); }
+if (deployConfig && (deployConfig.database?.rules !== 'API ANIMES E CHAT/database.rules.json' || Object.keys(deployConfig).some(key => key !== 'database'))) {
+  failures.push('firebase.json deve publicar somente as regras do Realtime Database.');
+}
 
 const webConfig = read('public/firebase-config.js');
 if (!webConfig.includes('projectId:         "' + expectedProject + '"')) {

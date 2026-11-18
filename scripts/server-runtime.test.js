@@ -43,6 +43,16 @@ test('HTTP real: páginas, navegação, recursos e barreiras de API', async t =>
     }
     for (const asset of assets) assert.equal((await request(asset)).status,200,asset);
   });
+  await t.test('rota inexistente usa 404 visual e recursos preservam erro simples', async () => {
+    const page=await request('/pagina-inexistente',{headers:{Accept:'text/html'}});
+    assert.equal(page.status,404);
+    assert.match(page.headers.get('content-type'),/text\/html/);
+    assert.match(await page.text(),/404 — Página não encontrada/);
+    const asset=await request('/arquivo-inexistente.js');
+    assert.equal(asset.status,404);
+    assert.doesNotMatch(asset.headers.get('content-type'),/text\/html/);
+    assert.equal((await request('/404.html')).status,200);
+  });
   await t.test('APIs exigem autenticação e uploads têm limite', async () => {
     for (const endpoint of ['/api/ai/episode','/api/ai/anime','/api/ai/recommendations','/api/profile-photo']) {
       const response = await request(endpoint,{method:'POST',body:'{}'});

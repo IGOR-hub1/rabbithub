@@ -291,7 +291,7 @@ test('retomada espera metadados e seek antes de reproduzir', () => {
   const video={duration:100,seeking:false,pause(){},
     get currentTime(){return time;},set currentTime(value){time=value;this.seeking=true;},
     addEventListener(name,fn){events[name]=fn;},removeEventListener(name){delete events[name];}};
-  const window={setTimeout(){return 1;}};
+  const window={setTimeout(){return 1;},clearTimeout(){}};
   const document={getElementById(id){return nodes[id];}};
   const context=vm.createContext({window,document,Number,Math,
     resumePromptShown:false,resumeDecisionPending:false,resumeRequested:false,
@@ -848,12 +848,11 @@ test('CSP permite apenas a origem pública usada pelo catálogo direto', () => {
   assert.match(player, /var intermediate = \(url\.hostname === 'meusdoramas\.club'/);
 });
 
-test('arquivos Firebase apontam para regras separadas e válidas', () => {
+test('deploy Firebase usa apenas Realtime Database e preserva regras opcionais', () => {
   const config = JSON.parse(read('firebase.json'));
   const databaseRules = JSON.parse(read('API ANIMES E CHAT/database.rules.json'));
   assert.equal(config.database.rules, 'API ANIMES E CHAT/database.rules.json');
-  assert.equal(config.storage.rules, 'storage.rules');
-  assert.equal(config.firestore.rules, 'firestore.rules');
+  assert.deepEqual(Object.keys(config), ['database']);
   assert.ok(databaseRules.rules.rhSocialV1);
   assert.ok(databaseRules.rules.dk_broadcast);
   assert.match(read('storage.rules'), /allow read, write: if false/);

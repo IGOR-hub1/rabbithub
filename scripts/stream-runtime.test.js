@@ -50,6 +50,7 @@ test('stream HTTP entrega Range, cancela ao sair e limita respostas em memória'
   };
   vm.runInNewContext(fs.readFileSync(path.join(root,'server.js'),'utf8')+'\nmodule.exports={server,fetchRaw};',context);
   const {server,fetchRaw}=context.module.exports;
+  server.listen(0,'127.0.0.1');
   await once(server,'listening');
   t.after(()=>{server.closeAllConnections();server.close();});
   const base='http://127.0.0.1:'+server.address().port+'/stream?url=';

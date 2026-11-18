@@ -733,7 +733,7 @@ try {
         reload:async()=>{},getIdToken:async()=> 'fixture',getIdTokenResult:async()=>({token:'fixture',claims:{email_verified:true}})};
       const authObject={currentUser:user,onAuthStateChanged:fn=>{setTimeout(()=>fn(user),20);return ()=>{};}};
       const auth=()=>authObject;
-      const ref=()=>({on(){},off(){},once:async()=>({val:()=>null,forEach(){}}),transaction:async()=>({committed:false}),set:async()=>{},update:async()=>{},child:()=>ref(),orderByChild:()=>ref(),limitToLast:()=>ref()});
+      const ref=(path='')=>({on(event,callback){if(event==='value'&&(path==='dk_broadcast/config'||path==='.info/connected'))setTimeout(()=>{const data=JSON.parse(localStorage.getItem('admin-fixture-database'));callback({val:()=>path==='.info/connected'?true:data.dk_broadcast.config,forEach(){}});},0);},off(){},once:async()=>({val:()=>null,forEach(){}}),transaction:async()=>({committed:false}),set:async()=>{},update:async()=>{},child:part=>ref([path,part].filter(Boolean).join('/')),orderByChild:()=>ref(path),limitToLast:()=>ref(path)});
       const database=()=>({ref});database.ServerValue={TIMESTAMP:{'.sv':'timestamp'}};
       window.firebase={apps:[{}],auth,database,initializeApp(){}};
       const fixtureKey='admin-fixture-database';

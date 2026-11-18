@@ -76,3 +76,26 @@ test('admin também encerra espera por token que nunca resolve',async()=>{
   const db=window.RabbitHubAdminDatabase.create({databaseURL:'https://unused.invalid',auth:()=>({currentUser:user}),timeout:20});
   await assert.rejects(db.ref('config').once('value'),/demorou/);db.close();
 });
+
+test('assinatura nativa recebe alterações remotas e é encerrada corretamente',async()=>{
+  const listeners=new Map();
+  const firebase={database:()=>({ref(path){return {
+    on(event,callback){listeners.set(path,callback);callback({val:()=>path==='.info/connected'});},
+    off(event,callback){if(listeners.get(path)===callback)listeners.delete(path);},
+    orderByChild(){return this;},limitToLast(){return this;}
+  };}})};
+  const window={fetch,crypto:require('node:crypto').webcrypto,firebase};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../public/admin-database.js'),'utf8'),{window,URL,AbortController,setTimeout,clearTimeout});
+  const user={getIdToken:async()=> 'test-token'};
+  const db=window.RabbitHubAdminDatabase.create({databaseURL:'https://unused.invalid',auth:()=>({currentUser:user})});
+  const values=[];
+  const callback=snapshot=>values.push(snapshot.val());
+  db.ref('dk_broadcast/config').on('value',callback);
+  listeners.get('dk_broadcast/config')({val:()=>({forcedTheme:'purple'})});
+  assert.equal(values.at(-1).forcedTheme,'purple');
+  db.ref('dk_broadcast/config').off('value',callback);
+  assert.equal(listeners.has('dk_broadcast/config'),false);
+  db.ref('users').on('value',callback);
+  db.close();
+  assert.equal(listeners.size,0);
+});
