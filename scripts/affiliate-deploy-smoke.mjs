@@ -16,4 +16,7 @@ for (const init of [{}, {method: 'POST', headers: {'Content-Type': 'application/
   const result = await response.json();
   assert.match(result.error || '', /Autenticação obrigatória/);
 }
-console.log(`Painel e API de afiliados publicados corretamente em ${base.origin}.`);
+const stream = await get('stream?url=' + encodeURIComponent('https://example.invalid/video.mp4'));
+assert.equal(stream.status, 400, `/stream: HTTP ${stream.status}; a função de mídia pode estar ausente`);
+assert.match(await stream.text(), /inválido/, '/stream deve validar o destino sem servir HTML estático');
+console.log(`Painel, API de afiliados e rota de streaming disponíveis em ${base.origin}.`);

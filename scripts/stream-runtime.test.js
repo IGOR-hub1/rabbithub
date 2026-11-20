@@ -8,6 +8,22 @@ const vm = require('node:vm');
 const { createRequire } = require('node:module');
 const { once } = require('node:events');
 
+test('Vercel publica a rota /stream como função sem alterar a URL da mídia', async () => {
+  const root=path.join(__dirname,'..');
+  const config=JSON.parse(fs.readFileSync(path.join(root,'vercel.json'),'utf8'));
+  assert.ok(config.functions['api/stream.mjs']);
+  assert.ok(config.rewrites.some(route=>route.source==='/stream'&&route.destination==='/api/stream'));
+  const {default:handler}=await import('../api/stream.mjs');
+  const gateway=http.createServer(handler);
+  gateway.listen(0,'127.0.0.1');
+  await once(gateway,'listening');
+  try {
+    const response=await fetch('http://127.0.0.1:'+gateway.address().port+'/api/stream?url='+encodeURIComponent('https://example.invalid/video.mp4'));
+    assert.equal(response.status,400);
+    assert.match(await response.text(),/inválido/);
+  } finally {gateway.closeAllConnections();await new Promise(resolve=>gateway.close(resolve));}
+});
+
 test('stream HTTP entrega Range, cancela ao sair e limita respostas em memória', async t => {
   let cancelled;
   const cancellation = new Promise(resolve => { cancelled=resolve; });
