@@ -12,11 +12,11 @@ O projeto usa Firebase Authentication, Realtime Database e uma função Node.js 
 - Node.js: versão suportada pela Vercel, 18 ou superior conforme `package.json`.
 - Variáveis do projeto: `FIREBASE_SERVICE_ACCOUNT_JSON` com o JSON completo da conta de serviço do projeto `animes-64408`; `FIREBASE_PROJECT_ID=animes-64408`; `FIREBASE_DATABASE_URL` com a URL HTTPS exata do Realtime Database ativo. Configure para o ambiente de produção e faça um novo deploy após alterações.
 
-O arquivo `vercel.json` encaminha `/api/affiliates/:action` para a função `/api/affiliates?action=:action`. Não coloque a função dentro de `public/`, nem configure uma regra genérica que capture `/api/*` antes desse encaminhamento.
+O arquivo `vercel.json` encaminha `/api/affiliates/:action` para a função `/api/affiliates?action=:action` e `/stream` para a função `/api/stream`. O player usa `/stream` para MP4, HLS e DASH; publicar apenas os arquivos de `public/` deixa todos os vídeos sem fonte. Não coloque as funções dentro de `public/`, nem configure uma regra genérica que capture `/api/*` antes desses encaminhamentos.
 
 ## Arquivos que precisam entrar no commit
 
-`vercel.json`, `api/affiliates.mjs`, `server.js`, `lib/affiliate-service.js`, `lib/affiliate-store.js`, `lib/firebase-auth.js`, `lib/account-plan.js`, `scripts/verify-affiliate-deploy.mjs`, os arquivos `public/partners*`, `public/affiliates-admin*`, `public/affiliate*` e `public/simulator-admin*`.
+`vercel.json`, `api/affiliates.mjs`, `api/stream.mjs`, `server.js`, `lib/affiliate-service.js`, `lib/affiliate-store.js`, `lib/firebase-auth.js`, `lib/account-plan.js`, `scripts/verify-affiliate-deploy.mjs`, os arquivos `public/partners*`, `public/affiliates-admin*`, `public/affiliate*` e `public/simulator-admin*`.
 
 Em 18/11/2026, a branch pública `main` tinha `vercel.json` e as páginas, mas não tinha `api/affiliates.mjs`, `lib/affiliate-service.js` nem `lib/affiliate-store.js`. Confirme que esses arquivos aparecem no commit implantado; uma alteração local isolada não muda o deployment.
 
