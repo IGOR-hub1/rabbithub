@@ -13,6 +13,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="firebase-config.js?v=20261031-2"></script>
+<script src="cast-share-config.js?v=20261120-1"></script>
+<script src="cast-share.js?v=20261120-2"></script>
 <script src="social-firebase-config.js?v=20261005-2"></script>
 <script src="social-firebase.js?v=20261005-2"></script>
 <script src="uid-utils.js?v=20260903-1"></script>
@@ -660,6 +662,7 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
 <link rel="stylesheet" href="viewport-responsive.css?v=20261111-1">
 <link rel="stylesheet" href="player-mobile.css?v=20261116-2">
 <link rel="stylesheet" href="player-controls.css?v=20261118-1">
+<link rel="stylesheet" href="cast-share.css?v=20261120-1">
 </head>
 <body data-page="player">
 
@@ -855,6 +858,9 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
                               </div>
 
                               <div class="dk-bar-right">
+                                <button class="dk-btn" id="dk-btn-cast" aria-label="Transmitir anime" aria-expanded="false" aria-controls="dk-cast-modal" type="button" title="Transmitir anime">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18h.01M3 14a4 4 0 0 1 4 4M3 10a8 8 0 0 1 8 8"/><path d="M9 5h10a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"/></svg>
+                                </button>
                                 <button class="dk-btn" id="dk-btn-pip" aria-label="Picture in Picture" type="button">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><rect x="13" y="11" width="7" height="6" rx="1" fill="currentColor" stroke="none"/></svg>
                                 </button>
@@ -876,6 +882,16 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
                                     <button class="dk-mi" data-speed="2" type="button">2x</button>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                    <div class="dk-cast-modal" id="dk-cast-modal" hidden role="dialog" aria-modal="true" aria-labelledby="dk-cast-title">
+                        <div class="dk-cast-card">
+                            <div class="dk-cast-head"><div><span class="dk-cast-kicker">X-BUNNY CAST</span><h2 id="dk-cast-title">Transmitir anime</h2></div><button class="dk-cast-close" id="dk-cast-close" type="button" aria-label="Fechar">×</button></div>
+                            <div class="dk-cast-meta"><strong id="dk-cast-anime">Anime</strong><span id="dk-cast-episode">Episódio</span></div>
+                            <label class="dk-cast-label" for="dk-cast-link">Link de compartilhamento</label>
+                            <input class="dk-cast-link" id="dk-cast-link" type="text" readonly aria-label="Link gerado">
+                            <div class="dk-cast-actions"><button class="dk-cast-copy" id="dk-cast-copy" type="button" disabled>Copiar link</button><button class="dk-cast-end" id="dk-cast-end" type="button" disabled>Encerrar compartilhamento</button></div>
+                            <p class="dk-cast-status" id="dk-cast-status" role="status" aria-live="polite"></p>
                         </div>
                     </div>
                     <div class="dk-resume" id="dk-resume" hidden role="dialog" aria-modal="true" aria-labelledby="dk-resume-title">
@@ -1207,6 +1223,8 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
     var animeData = null;
     var retryCount = 0;
     var sourceFallbackCount = 0;
+    var castSourceUrl = '';
+    var castIframeUrl = '';
     var resumeDecisionPending = false;
     var resumePromptShown = false;
     var playbackContext = null;
@@ -1744,6 +1762,19 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
         return '';
     }
 
+    function castIframeFromData(data){
+        var candidates=[data&&data.provider,data&&data.iframe,data&&data.serviceIframe];
+        for(var i=0;i<candidates.length;i++){
+            try{
+                var url=new URL(String(candidates[i]||''));
+                if(url.protocol==='https:'&&url.hostname==='serv01.meusdoramas.club'&&
+                    !url.port&&!url.username&&!url.password&&url.pathname==='/'&&!url.search&&
+                    /^#\/video\/[0-9]{1,12}\/[0-9]{1,4}\/[0-9]{1,4}\/$/.test(url.hash))return url.href;
+            }catch(e){}
+        }
+        return '';
+    }
+
     async function carregarPlayer() {
         if (!epLink) {
             mostrarErro('Nenhum episódio selecionado.', 'Volte e selecione um episódio para assistir.');
@@ -1864,6 +1895,19 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
         } catch(e) {
             return value.replace(/[?#].*$/, '').replace(/\/+$/, '');
         }
+    }
+
+    function updateCastContext(){
+        if(!window.XBunnyCastShare)return;
+        if(!castSourceUrl&&!castIframeUrl){window.XBunnyCastShare.setContext(null);return;}
+        window.XBunnyCastShare.setContext({
+            animeSlug:animeSlug,
+            episodeLink:epLink,
+            animeTitle:animeTitulo||(animeData&&animeData.titulo)||animeSlug,
+            episodeTitle:epNome,
+            sourceUrl:castSourceUrl,
+            iframeUrl:castIframeUrl
+        });
     }
 
     function episodePlayerHref(episode, index){
@@ -2043,6 +2087,7 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
                 epNome = canonicalEpisode.nome || epNome;
             }
             aplicarDetalhesNaTela();
+            updateCastContext();
         } catch(e) {
             // O vídeo já está visível. Falha de metadados não deve
             // desmontar o iframe nem trocar a tela por um erro.
@@ -2074,6 +2119,7 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
         var loadingOv = document.getElementById('video-loading');
         var sources = data.sources || [];
         var finalProviderIframe = playerIframeFallback(data);
+        castIframeUrl=castIframeFromData(data);updateCastContext();
         var requiresNativePlayback = false;
         try {
             var providerAddress = new URL(finalProviderIframe);
@@ -2087,6 +2133,7 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
         }
 
         function mountProviderIframe(url){
+            castSourceUrl='';castIframeUrl=castIframeFromData({iframe:url})||castIframeUrl;updateCastContext();
             var wrapper = document.getElementById('video-wrapper');
             if (!wrapper) return false;
             var timelinePlayer=document.getElementById('dk-player');
@@ -2568,6 +2615,7 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
                 healthSource=src;healthSuccessKey='';
                 clearWatchdog();
                 var realUrl   = src.url;
+                castSourceUrl=realUrl;updateCastContext();
                 var streamUrl = proxied(realUrl, src.referer || data.referer || '');
                 var isHls = /\.m3u8(\?|$)/i.test(realUrl) ||
                             (src.type && /mpegurl/i.test(src.type));
@@ -3001,7 +3049,7 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
         }
         root.addEventListener('touchstart',function(event){
             if(!gestureAllowed()||event.touches.length!==1)return;
-            if(event.target.closest('button,.dk-progress,.dk-settings-menu,.ep-modal,.dk-resume,.dk-next-overlay'))return;
+            if(event.target.closest('button,.dk-progress,.dk-settings-menu,.ep-modal,.dk-resume,.dk-next-overlay,.dk-cast-modal'))return;
             var touch=event.touches[0],rect=root.getBoundingClientRect();
             gesture={x:touch.clientX,y:touch.clientY,startTime:video.currentTime||0,startVolume:video.volume,startBrightness:brightness,width:Math.max(1,rect.width),height:Math.max(1,rect.height),right:touch.clientX>rect.left+rect.width/2,mode:'',moved:false};
         },{passive:true});
@@ -3202,6 +3250,7 @@ html.rh-player-fullscreen,html.rh-player-fullscreen body{overflow:hidden!importa
         // Atalhos de teclado
         document.addEventListener('keydown', function(ev){
             var tag = (ev.target && ev.target.tagName || '').toLowerCase();
+            if (!document.getElementById('dk-cast-modal').hidden) return;
             if (tag === 'input' || tag === 'textarea' || ev.target.isContentEditable) return;
             if (root.classList.contains('dk-locked')) return;
             switch(ev.key){
