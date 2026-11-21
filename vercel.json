@@ -1,0 +1,14 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": "node scripts/verify-affiliate-deploy.mjs",
+  "outputDirectory": "public",
+  "functions": {
+    "api/affiliates.mjs": { "maxDuration": 30 },
+    "api/stream.mjs": { "maxDuration": 60 }
+  },
+  "rewrites": [
+    { "source": "/api/affiliates/:action", "destination": "/api/affiliates?action=:action" },
+    { "source": "/stream", "destination": "/api/stream" }
+  ]
+}
