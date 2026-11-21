@@ -1,0 +1,233 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "partners": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid && auth.token.email_verified === true && root.child('users').child($uid).child('banned').val() !== true && root.child('users').child($uid).child('blocked').val() !== true",
+        ".write": false
+      }
+    },
+    "referralLinks": { ".read": false, ".write": false },
+    "referralClicks": { ".read": false, ".write": false },
+    "referralVisitorClicks": { ".read": false, ".write": false },
+    "referrals": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid && auth.token.email_verified === true && root.child('users').child($uid).child('banned').val() !== true && root.child('users').child($uid).child('blocked').val() !== true",
+        ".write": false
+      }
+    },
+    "conversions": { ".read": false, ".write": false },
+    "commissions": { ".read": false, ".write": false },
+    "payouts": { ".read": false, ".write": false },
+    "payoutReservations": { ".read": false, ".write": false },
+    "affiliateSettings": { ".read": false, ".write": false },
+    "affiliateAudit": { ".read": false, ".write": false },
+    "partnerCommissionRules": { ".read": false, ".write": false },
+    "commissionBudgetUsage": { ".read": false, ".write": false },
+    "simulationFlows": { ".read": false, ".write": false },
+    "affiliateTestAccounts": { ".read": false, ".write": false },
+    "admins": {
+      "$uid": {
+        ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
+        ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (root.child('admins').child(auth.uid).val() === true || (auth.uid === $uid && auth.token.email === 'krabelodesouza52@gmail.com' && newData.val() === true))"
+      }
+    },
+    "users": {
+      ".indexOn": ["email"],
+      "$uid": {
+        ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
+        ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (root.child('admins').child(auth.uid).val() === true || (auth.uid === $uid && newData.child('uid').val() === auth.uid && (newData.child('email').val() === auth.token.email || (data.exists() && newData.child('email').val() === data.child('email').val())) && ((!data.exists() && newData.child('isAdmin').val() !== true && newData.child('role').val() === null && newData.child('plan').val() === 'Free' && newData.child('currentPlan').val() === 'Free' && newData.child('planName').val() === null && newData.child('tier').val() === null && newData.child('premium').val() !== true && newData.child('vip').val() !== true && newData.child('isPremium').val() !== true && newData.child('premiumUntil').val() === null && newData.child('vipUntil').val() === null && newData.child('planExpiresAt').val() === null && newData.child('planExpiration').val() === null && newData.child('expiresAt').val() === null && newData.child('subscriptionStatus').val() === null && newData.child('planStatus').val() === null && newData.child('planUpdatedAt').val() === null && newData.child('account').val() === null && newData.child('subscription').val() === null && newData.child('banned').val() !== true && newData.child('blocked').val() !== true) || (data.exists() && newData.child('isAdmin').val() === data.child('isAdmin').val() && newData.child('role').val() === data.child('role').val() && newData.child('plan').val() === data.child('plan').val() && newData.child('currentPlan').val() === data.child('currentPlan').val() && newData.child('planName').val() === data.child('planName').val() && newData.child('tier').val() === data.child('tier').val() && newData.child('premium').val() === data.child('premium').val() && newData.child('vip').val() === data.child('vip').val() && newData.child('isPremium').val() === data.child('isPremium').val() && newData.child('premiumUntil').val() === data.child('premiumUntil').val() && newData.child('vipUntil').val() === data.child('vipUntil').val() && newData.child('planExpiresAt').val() === data.child('planExpiresAt').val() && newData.child('planExpiration').val() === data.child('planExpiration').val() && newData.child('expiresAt').val() === data.child('expiresAt').val() && newData.child('subscriptionStatus').val() === data.child('subscriptionStatus').val() && newData.child('planStatus').val() === data.child('planStatus').val() && newData.child('planUpdatedAt').val() === data.child('planUpdatedAt').val() && newData.child('account').val() === data.child('account').val() && newData.child('subscription').val() === data.child('subscription').val() && newData.child('banned').val() === data.child('banned').val() && newData.child('blocked').val() === data.child('blocked').val()))))",
+        "profiles": {
+          "$profile": {
+            ".validate": "root.child('admins').child(auth.uid).val() === true || data.exists() || $profile === '0' || (((root.child('users').child($uid).child('premium').val() === true || root.child('users').child($uid).child('vip').val() === true || root.child('users').child($uid).child('isPremium').val() === true) && ((root.child('users').child($uid).child('premiumUntil').exists() && (root.child('users').child($uid).child('premiumUntil').val() === 0 || root.child('users').child($uid).child('premiumUntil').val() > now)) || (!root.child('users').child($uid).child('premiumUntil').exists() && (!root.child('users').child($uid).child('vipUntil').exists() || root.child('users').child($uid).child('vipUntil').val() === 0 || root.child('users').child($uid).child('vipUntil').val() > now)))) && ($profile === '1' || $profile === '2' || $profile === '3' || $profile === '4'))",
+            "theme": {
+              ".validate": "root.child('admins').child(auth.uid).val() === true || newData.val() === data.val() || newData.val() === 'blue' || ((root.child('users').child($uid).child('premium').val() === true || root.child('users').child($uid).child('vip').val() === true || root.child('users').child($uid).child('isPremium').val() === true) && ((root.child('users').child($uid).child('premiumUntil').exists() && (root.child('users').child($uid).child('premiumUntil').val() === 0 || root.child('users').child($uid).child('premiumUntil').val() > now)) || (!root.child('users').child($uid).child('premiumUntil').exists() && (!root.child('users').child($uid).child('vipUntil').exists() || root.child('users').child($uid).child('vipUntil').val() === 0 || root.child('users').child($uid).child('vipUntil').val() > now))))"
+            }
+          }
+        },
+        "profileCustomization": {
+          "$profile": {
+            "theme": {
+              ".validate": "root.child('admins').child(auth.uid).val() === true || newData.val() === data.val() || newData.val() === 'blue' || ((root.child('users').child($uid).child('premium').val() === true || root.child('users').child($uid).child('vip').val() === true || root.child('users').child($uid).child('isPremium').val() === true) && ((root.child('users').child($uid).child('premiumUntil').exists() && (root.child('users').child($uid).child('premiumUntil').val() === 0 || root.child('users').child($uid).child('premiumUntil').val() > now)) || (!root.child('users').child($uid).child('premiumUntil').exists() && (!root.child('users').child($uid).child('vipUntil').exists() || root.child('users').child($uid).child('vipUntil').val() === 0 || root.child('users').child($uid).child('vipUntil').val() > now))))"
+            }
+          }
+        },
+        "profileHistory": {
+          ".validate": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
+        },
+        "profileProgress": {
+          ".validate": "auth != null && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
+        },
+        "animeAlerts": {
+          ".validate": "root.child('admins').child(auth.uid).val() === true || newData.val() === data.val() || ((data.parent().child('premium').val() === true || data.parent().child('vip').val() === true || data.parent().child('isPremium').val() === true) && ((data.parent().child('premiumUntil').exists() && (data.parent().child('premiumUntil').val() === 0 || data.parent().child('premiumUntil').val() > now)) || (!data.parent().child('premiumUntil').exists() && (!data.parent().child('vipUntil').exists() || data.parent().child('vipUntil').val() === 0 || data.parent().child('vipUntil').val() > now))))"
+        },
+        "backups": {
+          ".validate": "root.child('admins').child(auth.uid).val() === true || newData.val() === data.val() || ((data.parent().child('premium').val() === true || data.parent().child('vip').val() === true || data.parent().child('isPremium').val() === true) && ((data.parent().child('premiumUntil').exists() && (data.parent().child('premiumUntil').val() === 0 || data.parent().child('premiumUntil').val() > now)) || (!data.parent().child('premiumUntil').exists() && (!data.parent().child('vipUntil').exists() || data.parent().child('vipUntil').val() === 0 || data.parent().child('vipUntil').val() > now))))"
+        },
+        "devices": {
+          "$device": {
+            "authTime": {
+              ".validate": "newData.isNumber() && ((data.exists() && newData.val() === data.val()) || (!data.exists() && newData.val() === auth.token.auth_time))"
+            }
+          }
+        }
+      },
+      ".read": "auth != null && auth.token.email_verified === true && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && root.child('admins').child(auth.uid).val() === true"
+    },
+    "maintenance": {
+      ".read": true,
+      ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && root.child('admins').child(auth.uid).val() === true"
+    },
+    "dk_broadcast": {
+      "current": {
+        ".read": true,
+        ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && root.child('admins').child(auth.uid).val() === true",
+        "views": {
+          ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && newData.isNumber() && newData.val() === data.val() + 1"
+        }
+      },
+      "history": {
+        ".indexOn": ["updatedAt"],
+        ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true",
+        ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && root.child('admins').child(auth.uid).val() === true"
+      },
+      "maintenance": {
+        ".read": true,
+        ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && root.child('admins').child(auth.uid).val() === true"
+      },
+      "config": {
+        ".read": true,
+        ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && root.child('admins').child(auth.uid).val() === true"
+      },
+      "homeFeatured": {
+        ".read": true,
+        ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && root.child('admins').child(auth.uid).val() === true"
+      },
+      "skipSegments": {
+        ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (root.child('admins').child(auth.uid).val() === true || ((root.child('users').child(auth.uid).child('premium').val() === true || root.child('users').child(auth.uid).child('vip').val() === true || root.child('users').child(auth.uid).child('isPremium').val() === true) && ((root.child('users').child(auth.uid).child('premiumUntil').exists() && (root.child('users').child(auth.uid).child('premiumUntil').val() === 0 || root.child('users').child(auth.uid).child('premiumUntil').val() > now)) || (!root.child('users').child(auth.uid).child('premiumUntil').exists() && (!root.child('users').child(auth.uid).child('vipUntil').exists() || root.child('users').child(auth.uid).child('vipUntil').val() === 0 || root.child('users').child(auth.uid).child('vipUntil').val() > now)))))",
+        ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && root.child('admins').child(auth.uid).val() === true"
+      }
+    },
+    "notifications": {
+      "global": {
+        ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true",
+        ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && root.child('admins').child(auth.uid).val() === true"
+      },
+      "user": {
+        "$uid": {
+          ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
+          ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
+        }
+      }
+    },
+    "rhSocialV1": {
+      "animeChats": {
+        ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true",
+        "$anime": {
+          "$message": {
+            ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (root.child('admins').child(auth.uid).val() === true || (!data.exists() && (newData.child('uid').val() === auth.uid || newData.child('accountUid').val() === auth.uid)) || (data.exists() && (data.child('uid').val() === auth.uid || data.child('accountUid').val() === auth.uid) && (newData.child('uid').val() === auth.uid || newData.child('accountUid').val() === auth.uid)))",
+            ".validate": "root.child('admins').child(auth.uid).val() === true || !newData.exists() || (newData.child('uid').val() === auth.uid && newData.child('plan').val() === (((root.child('users').child(auth.uid).child('premium').val() === true || root.child('users').child(auth.uid).child('vip').val() === true || root.child('users').child(auth.uid).child('isPremium').val() === true) && ((root.child('users').child(auth.uid).child('premiumUntil').exists() && (root.child('users').child(auth.uid).child('premiumUntil').val() === 0 || root.child('users').child(auth.uid).child('premiumUntil').val() > now)) || (!root.child('users').child(auth.uid).child('premiumUntil').exists() && (!root.child('users').child(auth.uid).child('vipUntil').exists() || root.child('users').child(auth.uid).child('vipUntil').val() === 0 || root.child('users').child(auth.uid).child('vipUntil').val() > now)))) ? 'VIP' : 'Free') && (newData.child('spoiler').val() !== true || ((root.child('users').child(auth.uid).child('premium').val() === true || root.child('users').child(auth.uid).child('vip').val() === true || root.child('users').child(auth.uid).child('isPremium').val() === true) && ((root.child('users').child(auth.uid).child('premiumUntil').exists() && (root.child('users').child(auth.uid).child('premiumUntil').val() === 0 || root.child('users').child(auth.uid).child('premiumUntil').val() > now)) || (!root.child('users').child(auth.uid).child('premiumUntil').exists() && (!root.child('users').child(auth.uid).child('vipUntil').exists() || root.child('users').child(auth.uid).child('vipUntil').val() === 0 || root.child('users').child(auth.uid).child('vipUntil').val() > now))))))"
+          }
+        }
+      },
+      "publicProfiles": {
+        ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true",
+        "$uid": {
+          ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
+          "$profile": {
+            ".validate": "root.child('admins').child(auth.uid).val() === true || !newData.exists() || (newData.child('accountUid').val() === $uid && newData.child('plan').val() === (((root.child('users').child($uid).child('premium').val() === true || root.child('users').child($uid).child('vip').val() === true || root.child('users').child($uid).child('isPremium').val() === true) && ((root.child('users').child($uid).child('premiumUntil').exists() && (root.child('users').child($uid).child('premiumUntil').val() === 0 || root.child('users').child($uid).child('premiumUntil').val() > now)) || (!root.child('users').child($uid).child('premiumUntil').exists() && (!root.child('users').child($uid).child('vipUntil').exists() || root.child('users').child($uid).child('vipUntil').val() === 0 || root.child('users').child($uid).child('vipUntil').val() > now)))) ? 'VIP' : 'Free'))"
+          }
+        }
+      },
+      "userComments": {
+        "$uid": {
+          "$profile": {
+            ".indexOn": ["createdAt"]
+          },
+          ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
+          ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
+        }
+      },
+      "notifications": {
+        "$uid": {
+          ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
+          "$profile": {
+            "$notification": {
+              ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true || (!data.exists() && newData.child('authorUid').val() === auth.uid))"
+            }
+          }
+        }
+      },
+      "reports": {
+        "$uid": {
+          ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
+          ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
+        }
+      },
+      "reportLimits": {
+        "$uid": {
+          ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)",
+          ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
+        }
+      }
+    },
+    "chatReports": {
+      ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && root.child('admins').child(auth.uid).val() === true",
+      "$uid": {
+        ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
+      }
+    },
+    "dk_player_health": {
+      ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true",
+      "$anime": {
+        "$episode": {
+          ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true",
+          ".validate": "root.child('admins').child(auth.uid).val() === true || (newData.child('successes').isNumber() && newData.child('errors').isNumber() && newData.child('reports').isNumber() && newData.child('successes').val() >= (data.child('successes').exists() ? data.child('successes').val() : 0) && newData.child('errors').val() >= (data.child('errors').exists() ? data.child('errors').val() : 0) && newData.child('reports').val() >= (data.child('reports').exists() ? data.child('reports').val() : 0) && newData.child('successes').val() <= (data.child('successes').exists() ? data.child('successes').val() + 1 : 1) && newData.child('errors').val() <= (data.child('errors').exists() ? data.child('errors').val() + 1 : 1) && newData.child('reports').val() <= (data.child('reports').exists() ? data.child('reports').val() + 1 : 1) && (newData.child('successes').val() - (data.child('successes').exists() ? data.child('successes').val() : 0)) + (newData.child('errors').val() - (data.child('errors').exists() ? data.child('errors').val() : 0)) + (newData.child('reports').val() - (data.child('reports').exists() ? data.child('reports').val() : 0)) === 1 && newData.child('lastStatus').val().matches(/^(success|error|report)$/) && newData.child('lastDetail').isString() && newData.child('lastDetail').val().length <= 180 && newData.child('updatedAt').isNumber() && newData.child('updatedAt').val() <= now + 60000)"
+        }
+      }
+    },
+    "episodeReports": {
+      ".read": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && root.child('admins').child(auth.uid).val() === true",
+      "$uid": {
+        ".write": "auth != null && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && auth.token.email_verified === true && (auth.uid === $uid || root.child('admins').child(auth.uid).val() === true)"
+      }
+    },
+    "castAuthorizedSources": {
+      "$anime": {
+        "$episode": {
+          "$source": {
+            ".write": "auth != null && auth.token.email_verified === true && !root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true && root.child('admins').child(auth.uid).val() === true && $anime.matches(/^[A-Za-z0-9_-]{1,128}$/) && $episode.matches(/^[A-Za-z0-9_-]{1,128}$/) && $source.matches(/^[A-Za-z0-9_-]{1,128}$/)",
+            ".validate": "newData.val() === true"
+          }
+        }
+      }
+    },
+    "castSessions": {
+      "$code": {
+        ".read": "($code.matches(/^[1-9][0-9]{6}$/) || $code.matches(/^[A-Za-z0-9_-]{32}$/)) && (!data.exists() || (root.child('users').child(data.child('ownerUid').val()).child('banned').val() !== true && root.child('users').child(data.child('ownerUid').val()).child('blocked').val() !== true && (root.child('castAuthorizedSources').child(data.child('animeId').val()).child(data.child('episodeId').val()).child(data.child('sourceId').val()).val() === true || (data.child('sourceId').val() === 'serv01_iframe' && data.child('iframeUrl').isString() && data.child('iframeUrl').val().matches(/^https:[/][/]serv01[.]meusdoramas[.]club[/]#[/]video[/][0-9]{1,12}[/][0-9]{1,4}[/][0-9]{1,4}[/]$/)))))",
+        ".write": "auth != null && auth.token.email_verified === true && !root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true && ($code.matches(/^[1-9][0-9]{6}$/) || $code.matches(/^[A-Za-z0-9_-]{32}$/)) && ((!data.exists() && newData.exists() && $code.matches(/^[1-9][0-9]{6}$/) && newData.child('id').val() === $code && newData.child('ownerUid').val() === auth.uid && newData.child('status').val() === 'active' && newData.child('createdAt').val() === now && newData.child('expiresAt').val() > now && newData.child('expiresAt').val() <= now + 86400000 && ((!newData.child('iframeUrl').exists() && root.child('castAuthorizedSources').child(newData.child('animeId').val()).child(newData.child('episodeId').val()).child(newData.child('sourceId').val()).val() === true) || (newData.child('sourceId').val() === 'serv01_iframe' && newData.child('iframeUrl').isString() && newData.child('iframeUrl').val().matches(/^https:[/][/]serv01[.]meusdoramas[.]club[/]#[/]video[/][0-9]{1,12}[/][0-9]{1,4}[/][0-9]{1,4}[/]$/)))) || (data.exists() && data.child('ownerUid').val() === auth.uid && (!newData.exists() || (data.child('status').val() === 'active' && newData.child('status').val() === 'ended' && newData.child('id').val() === data.child('id').val() && newData.child('ownerUid').val() === data.child('ownerUid').val() && newData.child('animeId').val() === data.child('animeId').val() && newData.child('episodeId').val() === data.child('episodeId').val() && newData.child('sourceId').val() === data.child('sourceId').val() && newData.child('iframeUrl').val() === data.child('iframeUrl').val() && newData.child('createdAt').val() === data.child('createdAt').val() && newData.child('expiresAt').val() === data.child('expiresAt').val()))))",
+        ".validate": "newData.hasChildren(['id', 'ownerUid', 'animeId', 'episodeId', 'sourceId', 'createdAt', 'expiresAt', 'status'])",
+        "id": { ".validate": "newData.isString() && newData.val() === $code" },
+        "ownerUid": { ".validate": "newData.isString() && newData.val() === auth.uid" },
+        "animeId": { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,128}$/)" },
+        "episodeId": { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,128}$/)" },
+        "sourceId": { ".validate": "newData.isString() && newData.val().matches(/^[A-Za-z0-9_-]{1,128}$/)" },
+        "iframeUrl": { ".validate": "newData.isString() && newData.val().matches(/^https:[/][/]serv01[.]meusdoramas[.]club[/]#[/]video[/][0-9]{1,12}[/][0-9]{1,4}[/][0-9]{1,4}[/]$/)" },
+        "createdAt": { ".validate": "newData.isNumber() && ((data.exists() && newData.val() === data.val()) || (!data.exists() && newData.val() === now))" },
+        "expiresAt": { ".validate": "newData.isNumber() && ((data.exists() && newData.val() === data.val()) || (!data.exists() && newData.val() > now && newData.val() <= now + 86400000))" },
+        "status": { ".validate": "newData.val() === 'active' || newData.val() === 'ended'" },
+        "$other": { ".validate": false }
+      }
+    },
+    "revokedSessions": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid && auth.token.email_verified === true",
+        "$authTime": {
+          ".write": "auth != null && auth.uid === $uid && auth.token.email_verified === true && (!root.child('revokedSessions').child(auth.uid).child(auth.token.auth_time + '').exists() && root.child('users').child(auth.uid).child('banned').val() !== true && root.child('users').child(auth.uid).child('blocked').val() !== true) && newData.val() === true && $authTime.matches(/^[0-9]+$/)",
+          ".validate": "newData.val() === true"
+        }
+      }
+    }
+  }
+}
