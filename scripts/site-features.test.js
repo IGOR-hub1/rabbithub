@@ -38,6 +38,14 @@ test('plano VIP usa validade canonica e concessao permanente explicita', () => {
     subscription:{status:'expired',expiresAt:oldExpiry}
   });
   assert.equal(repaired.isVip,true);
+  const plus=normalize({plan:'Plus',premium:true,premiumUntil:0});
+  assert.equal(plus.key,'plus');
+  assert.equal(plus.name,'Plus');
+  assert.equal(plus.isVip,true);
+  const restored=context.window.RabbitHubAccountPlan.mergeSession({},
+    {plan:'Plus',premium:true,vip:true,premiumUntil:0});
+  assert.equal(restored.plan,'Plus');
+  assert.equal(restored.premium,true);
 });
 
 test('tema, perfis e progresso não regridem durante sincronização', () => {
@@ -843,11 +851,12 @@ test('CSP permite apenas a origem pública usada pelo catálogo direto', () => {
   assert.match(player, /var intermediate = \(url\.hostname === 'meusdoramas\.club'/);
 });
 
-test('deploy Firebase usa apenas Realtime Database e preserva regras opcionais', () => {
+test('deploy Firebase inclui regras do Realtime Database e Firestore fechado', () => {
   const config = JSON.parse(read('firebase.json'));
   const databaseRules = JSON.parse(read('API ANIMES E CHAT/database.rules.json'));
   assert.equal(config.database.rules, 'API ANIMES E CHAT/database.rules.json');
-  assert.deepEqual(Object.keys(config), ['database']);
+  assert.deepEqual(Object.keys(config), ['database','firestore']);
+  assert.equal(config.firestore.rules,'firestore.rules');
   assert.ok(databaseRules.rules.rhSocialV1);
   assert.ok(databaseRules.rules.dk_broadcast);
   assert.match(read('storage.rules'), /allow read, write: if false/);

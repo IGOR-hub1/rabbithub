@@ -7,11 +7,22 @@ const config = JSON.parse(fs.readFileSync(path.join(root, 'vercel.json'), 'utf8'
 const required = [
   'api/affiliates.mjs',
   'api/stream.mjs',
+  'api/plans.js',
+  'api/pix-order.js',
+  'api/mercado-pago-webhook.js',
+  'api/pix-status.js',
+  'api/pix-orders.js',
   'server.js',
   'lib/affiliate-service.js',
   'lib/affiliate-store.js',
   'lib/firebase-auth.js',
   'lib/account-plan.js',
+  'lib/plan-pricing.js',
+  'lib/pix-orders.js',
+  'lib/firestore-payment-orders.js',
+  'lib/pix-status.js',
+  'lib/pix-entitlements.js',
+  'lib/plan-duration.js',
   'public/admin.html',
   'public/partners.html',
   'public/affiliates-admin.html',
@@ -22,6 +33,8 @@ const missing = required.filter(file => !fs.statSync(path.join(root, file), {thr
 if (missing.length) throw new Error('Deploy incompleto. Arquivos ausentes: ' + missing.join(', '));
 if (config.framework !== null || config.outputDirectory !== 'public' ||
     !config.functions?.['api/affiliates.mjs'] || !config.functions?.['api/stream.mjs'] ||
+    !config.functions?.['api/pix-order.js'] ||
+    !config.functions?.['api/mercado-pago-webhook.js'] || !config.functions?.['api/pix-status.js'] || !config.functions?.['api/pix-orders.js'] ||
     !config.rewrites?.some(route => route.source === '/api/affiliates/:action' && route.destination === '/api/affiliates?action=:action') ||
     !config.rewrites?.some(route => route.source === '/stream' && route.destination === '/api/stream')) {
   throw new Error('Configuração Vercel incompatível com a API de afiliados e os arquivos estáticos.');

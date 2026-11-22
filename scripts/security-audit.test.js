@@ -209,6 +209,9 @@ test('backend de recursos VIP consulta a conta protegida e recusa Free', async (
   );
   const allowed = await entitlements.requireVip(request,{identity,fetch:response({plan:'VIP',premium:true,premiumUntil:0})});
   assert.equal(allowed.plan.isVip,true);
+  const plus = await entitlements.requireVip(request,{identity,fetch:response({plan:'Plus',premium:true,premiumUntil:0})});
+  assert.equal(plus.plan.key,'plus');
+  assert.equal(plus.plan.isVip,true);
 });
 
 test('telas privadas carregam uma unica fonte de sessao antes de plano e guarda', () => {

@@ -41,7 +41,8 @@ test('frontend, API e regras concordam sobre VIP sem renovar datas vencidas',()=
 test('regras negam escalada, contas bloqueadas, sessoes revogadas e leitura de terceiros',()=>{
   const user={uid:'u',email:'u@example.com',plan:'Free',currentPlan:'Free',premium:false,vip:false};
   assert.equal(evaluate(rules.users.$uid['.write'],{user,next:{...user,displayName:'Novo'}}),true);
-  for(const patch of [{premium:true},{isAdmin:true},{role:'admin'},{subscription:{active:true}}]){
+  for(const patch of [{premium:true},{isAdmin:true},{role:'admin'},{subscription:{active:true}},
+    {planActivatedAt:now},{appliedPaymentOrders:{'123e4567-e89b-42d3-a456-426614174000':true}}]){
     assert.equal(evaluate(rules.users.$uid['.write'],{user,next:{...user,...patch}}),false);
   }
   assert.equal(evaluate(rules.users.$uid['.read'],{user,revoked:true}),false);

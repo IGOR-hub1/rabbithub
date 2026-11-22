@@ -20,8 +20,13 @@ try { projectAliases = JSON.parse(read('.firebaserc')); }
 catch (error) { failures.push('.firebaserc não é um JSON válido: ' + error.message); }
 try { deployConfig = JSON.parse(read('firebase.json')); }
 catch (error) { failures.push('firebase.json não é um JSON válido: ' + error.message); }
-if (deployConfig && (deployConfig.database?.rules !== 'API ANIMES E CHAT/database.rules.json' || Object.keys(deployConfig).some(key => key !== 'database'))) {
-  failures.push('firebase.json deve publicar somente as regras do Realtime Database.');
+if (deployConfig && (deployConfig.database?.rules !== 'API ANIMES E CHAT/database.rules.json' ||
+    deployConfig.firestore?.rules !== 'firestore.rules' ||
+    Object.keys(deployConfig).some(key => key !== 'database' && key !== 'firestore'))) {
+  failures.push('firebase.json deve publicar apenas as regras do Realtime Database e do Firestore.');
+}
+if (!/allow read, write: if false/.test(read('firestore.rules'))) {
+  failures.push('firestore.rules deve negar acesso direto de clientes.');
 }
 
 const webConfig = read('public/firebase-config.js');

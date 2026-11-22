@@ -192,9 +192,10 @@ try {
   await cdp.send('Network.setBlockedURLs', {
     urls: ['*gstatic.com*', '*auth-guard.js*', '*user-session.js*', '*meusanimes.blog*', '*jsdelivr.net*']
   });
+  const plansOnly=process.argv.includes('--plans-only');
   const sessionFixture = `
       window.RabbitHubSession={
-        get:()=>({status:'authenticated',ready:true,uid:'ui-test',authUser:null,account:{uid:'ui-test',plan:'VIP',premium:true,profiles:[{id:'principal',name:'Teste',avatar:'',theme:'red'}]},profile:{id:'principal',name:'Teste',avatar:'',theme:'red'}}),
+        get:()=>({status:'authenticated',ready:true,uid:'ui-test',authUser:${plansOnly?"{uid:'ui-test',getIdToken:()=>Promise.resolve('fixture-token')}":'null'},account:{uid:'ui-test',plan:'${plansOnly?'Free':'VIP'}',premium:${plansOnly?'false':'true'},profiles:[{id:'principal',name:'Teste',avatar:'',theme:'red'}]},profile:{id:'principal',name:'Teste',avatar:'',theme:'red'}}),
         subscribe:(callback)=>{setTimeout(()=>callback(window.RabbitHubSession.get()),0);return ()=>{};},
         ready:()=>Promise.resolve(window.RabbitHubSession.get())
       };
@@ -206,10 +207,237 @@ try {
       localStorage.setItem('dk_theme_color','red');
       localStorage.setItem('dk_session',JSON.stringify({uid:'ui-test',displayName:'Teste',profileAvatar:'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%221%22 height=%221%22%3E%3Crect width=%221%22 height=%221%22 fill=%22red%22/%3E%3C/svg%3E'}));
       localStorage.setItem('dk_active_profile',JSON.stringify({id:'principal',name:'Teste',avatar:''}));
+      ${plansOnly?`window.__pixRequests=[];
+      window.__pixMockMode='success';
+      window.__pixMockStatus='pending';
+      const realFetch=window.fetch.bind(window);
+      window.fetch=function(url,options){
+        if(url==='/api/pix-orders')return Promise.resolve(new Response(JSON.stringify({ok:true,orders:[]}),{status:200,headers:{'Content-Type':'application/json'}}));
+        if(String(url).startsWith('/api/pix-status?')){
+          const last=window.__pixRequests[window.__pixRequests.length-1];
+          const plan=last?.body?.planId||'plus';
+          return Promise.resolve(new Response(JSON.stringify({ok:true,orderId:'test-order',planId:plan,
+            amountCents:plan==='vip'?990:1990,currency:'BRL',status:window.__pixMockStatus,
+            activatedAt:window.__pixMockStatus==='approved'?2000000000000:null}),
+            {status:200,headers:{'Content-Type':'application/json'}}));
+        }
+        if(url!=='/api/pix-order')return realFetch(url,options);
+        window.__pixRequests.push({url,method:options.method,headers:options.headers,body:JSON.parse(options.body)});
+        if(window.__pixMockMode==='error')return Promise.resolve(new Response(JSON.stringify({ok:false,error:'Pix indisponível no teste.'}),{status:503,headers:{'Content-Type':'application/json'}}));
+        const requested=JSON.parse(options.body).planId;
+        return Promise.resolve(new Response(JSON.stringify({ok:true,orderId:'test-order',planId:requested,amountCents:window.__pixMockMode==='tampered'?1:requested==='vip'?990:1990,currency:'BRL',status:'pending',gatewayStatus:'action_required',pixCopyPaste:'000201TESTPIXCODE',qrCodeBase64:requested==='vip'?'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lX8AAAAASUVORK5CYII=':null}),{status:200,headers:{'Content-Type':'application/json'}}));
+      };`:''}
     `;
   await cdp.send('Page.addScriptToEvaluateOnNewDocument', {source:sessionFixture});
-  await cdp.send('Page.navigate', { url: origin + '/index.html?ui-regression=1' });
+  await cdp.send('Page.navigate', { url: origin + (plansOnly?'/index.html?tab=perfil&ui-regression=1':'/index.html?ui-regression=1') });
   await waitForPage(cdp);
+
+  if(plansOnly){
+    let opened=false;
+    for(let attempt=0;attempt<50;attempt++){
+      const result=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+        const tile=document.querySelector('[data-yc-open="planos"]');
+        if(!tile)return false;
+        tile.click();
+        return document.getElementById('yc-sheet')?.getAttribute('data-sheet-kind')==='planos';
+      }())`});
+      opened=result.result.value===true;
+      if(opened)break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert.equal(opened,true,'a página de planos deve abrir');
+    for(const viewport of [
+      {name:'desktop',width:1440,height:1000,mobile:false},
+      {name:'mobile',width:390,height:844,mobile:true},
+      {name:'small-mobile',width:320,height:568,mobile:true}
+    ]){
+      await cdp.send('Emulation.setDeviceMetricsOverride',{
+        width:viewport.width,height:viewport.height,deviceScaleFactor:1,mobile:viewport.mobile
+      });
+      let page;
+      for(let attempt=0;attempt<50;attempt++){
+        const result=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+          const body=document.querySelector('#yc-sheet .yc-sheet-body');
+          const vip=body?.querySelector('.plan-card.vip');
+          const plus=body?.querySelector('.plan-card.plus');
+          return {viewport:innerWidth,overflow:body?body.scrollWidth-body.clientWidth:999,
+            vipPrice:vip?.querySelector('.plan-card-price')?.textContent.trim(),
+            plusPrice:plus?.querySelector('.plan-card-price')?.textContent.trim(),
+            vipId:vip?.querySelector('.plan-request-btn')?.dataset.planId,
+            plusId:plus?.querySelector('.plan-request-btn')?.dataset.planId,
+            hasClientAmount:!!body?.querySelector('[data-amount], [data-price]')};
+        }())`});
+        page=result.result.value;
+        if(page.vipPrice?.includes('9,90')&&page.plusPrice?.includes('19,90'))break;
+        await new Promise(resolve=>setTimeout(resolve,100));
+      }
+      assert.equal(page.viewport,viewport.width);
+      assert.ok(page.overflow<=1,'planos não devem transbordar em '+viewport.name);
+      assert.match(page.vipPrice,/R\$\s*9,90/);
+      assert.match(page.plusPrice,/R\$\s*19,90/);
+      assert.equal(page.vipId,'vip');
+      assert.equal(page.plusId,'plus');
+      assert.equal(page.hasClientAmount,false);
+      const screenshot=await captureScreenshot(cdp,viewport.name+'-plans');
+      console.log(JSON.stringify({viewport:viewport.name,vip:page.vipPrice,plus:page.plusPrice,overflow:page.overflow,screenshot}));
+      if(viewport.mobile){
+        const lower=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+          const card=document.querySelector('.plan-card.plus');
+          card.scrollIntoView({block:'center'});
+          const button=card.querySelector('.plan-request-btn');
+          const rect=button.getBoundingClientRect();
+          return {price:card.querySelector('.plan-card-price').textContent.trim(),
+            buttonVisible:rect.top>=0&&rect.bottom<=innerHeight,
+            overflow:document.querySelector('#yc-sheet .yc-sheet-body').scrollWidth-document.querySelector('#yc-sheet .yc-sheet-body').clientWidth};
+        }())`});
+        assert.match(lower.result.value.price,/R\$\s*19,90/);
+        assert.equal(lower.result.value.buttonVisible,true,'botão Plus deve ficar acessível em '+viewport.name);
+        assert.ok(lower.result.value.overflow<=1);
+        await captureScreenshot(cdp,viewport.name+'-plans-plus');
+      }
+    }
+    const clicked=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+      const button=document.querySelector('.plan-card.plus [data-plan-request]');
+      button.click();return {loading:button.textContent,disabled:button.disabled};
+    }())`});
+    assert.deepEqual(clicked.result.value,{loading:'Gerando Pix...',disabled:true});
+    let checkout;
+    for(let attempt=0;attempt<50;attempt++){
+      const result=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+        const panel=document.querySelector('.pix-checkout');
+        const body=document.querySelector('#yc-sheet .yc-sheet-body');
+        return {open:!!panel,plan:document.querySelector('#pix-plan')?.textContent,
+          amount:document.querySelector('#pix-amount')?.textContent,
+          status:document.querySelector('#pix-status')?.textContent,
+          code:document.querySelector('#pix-copy-code')?.value,
+          fallbackVisible:document.querySelector('#pix-qr-fallback')?.hidden===false,
+          overflow:body?body.scrollWidth-body.clientWidth:999,
+          request:window.__pixRequests[0],requests:window.__pixRequests.length};
+      }())`});
+      checkout=result.result.value;
+      if(checkout.open)break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert.equal(checkout.open,true);
+    assert.equal(checkout.plan,'Plano Plus');
+    assert.match(checkout.amount,/R\$\s*19,90/);
+    assert.equal(checkout.status,'Aguardando pagamento');
+    assert.equal(checkout.code,'000201TESTPIXCODE');
+    assert.equal(checkout.fallbackVisible,true);
+    assert.ok(checkout.overflow<=1);
+    assert.deepEqual(checkout.request.body,{planId:'plus'});
+    assert.equal(checkout.request.headers.Authorization,'Bearer fixture-token');
+    assert.equal(checkout.requests,1);
+    await captureScreenshot(cdp,'small-mobile-pix-checkout');
+    const mobileActions=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+      const button=document.getElementById('pix-copy-button');button.scrollIntoView({block:'center'});
+      const rect=button.getBoundingClientRect();
+      return {visible:rect.top>=0&&rect.bottom<=innerHeight,
+        overflow:document.querySelector('#yc-sheet .yc-sheet-body').scrollWidth-document.querySelector('#yc-sheet .yc-sheet-body').clientWidth};
+    }())`});
+    assert.equal(mobileActions.result.value.visible,true);
+    assert.ok(mobileActions.result.value.overflow<=1);
+    await captureScreenshot(cdp,'small-mobile-pix-actions');
+    const copy=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(async function(){
+      Object.defineProperty(navigator,'clipboard',{value:null,configurable:true});
+      document.getElementById('pix-copy-button').click();
+      await new Promise(resolve=>setTimeout(resolve,100));
+      return document.getElementById('pix-copy-feedback').textContent;
+    }())`,awaitPromise:true});
+    assert.match(copy.result.value,/copiado|Selecione e copie/);
+    await cdp.send('Runtime.evaluate',{expression:`window.__pixMockStatus='approved'`});
+    let confirmed=false;
+    for(let attempt=0;attempt<115;attempt++){
+      const result=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`document.getElementById('pix-status')?.textContent`});
+      if(result.result.value==='Plano ativado'){confirmed=true;break;}
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert.equal(confirmed,true,'status confirmado pelo backend deve aparecer no Pix');
+    await cdp.send('Runtime.evaluate',{expression:`window.__pixMockStatus='pending'`});
+    const closed=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+      document.getElementById('pix-close-button').click();
+      return {plans:!!document.querySelector('.plans-reference-screen'),requests:window.__pixRequests.length};
+    }())`});
+    assert.deepEqual(closed.result.value,{plans:true,requests:1});
+    for(let attempt=0;attempt<50;attempt++){
+      const ready=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`document.querySelector('.plan-card.plus [data-plan-request]')?.disabled===false`});
+      if(ready.result.value)break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    const failed=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+      window.__pixMockMode='error';document.querySelector('.plan-card.plus [data-plan-request]').click();return true;
+    }())`});
+    assert.equal(failed.result.value,true);
+    let errorState;
+    for(let attempt=0;attempt<50;attempt++){
+      const result=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+        const button=document.querySelector('.plan-card.plus [data-plan-request]');
+        return {disabled:button?.disabled,note:document.getElementById('plan-contact-note')?.textContent,checkout:!!document.querySelector('.pix-checkout')};
+      }())`});
+      errorState=result.result.value;
+      if(errorState.note?.includes('Pix indisponível no teste.'))break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert.equal(errorState.disabled,false);
+    assert.equal(errorState.checkout,false);
+    assert.match(errorState.note,/Pix indisponível no teste/);
+    await cdp.send('Runtime.evaluate',{expression:`window.__pixMockMode='tampered';document.querySelector('.plan-card.plus [data-plan-request]').click()`});
+    let tampered;
+    for(let attempt=0;attempt<50;attempt++){
+      const result=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`({note:document.getElementById('plan-contact-note')?.textContent,checkout:!!document.querySelector('.pix-checkout')})`});
+      tampered=result.result.value;
+      if(tampered.note?.includes('Resposta Pix inválida'))break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert.equal(tampered.checkout,false);
+    assert.match(tampered.note,/Resposta Pix inválida/);
+    const anonymous=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+      const original=RabbitHubSession.get;
+      RabbitHubSession.get=()=>({status:'anonymous',ready:true});
+      document.querySelector('.plan-card.plus [data-plan-request]').click();
+      const result={note:document.getElementById('plan-contact-note').textContent,requests:window.__pixRequests.length};
+      RabbitHubSession.get=original;
+      return result;
+    }())`});
+    assert.match(anonymous.result.value.note,/Entre na sua conta/);
+    assert.equal(anonymous.result.value.requests,3);
+    await cdp.send('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+    await cdp.send('Runtime.evaluate',{expression:`window.__pixMockMode='success';document.querySelector('.plan-card.plus [data-plan-request]').click()`});
+    for(let attempt=0;attempt<50;attempt++){
+      const ready=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`!!document.querySelector('.pix-checkout')`});
+      if(ready.result.value)break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    await captureScreenshot(cdp,'desktop-pix-checkout');
+    await cdp.send('Runtime.evaluate',{expression:`document.getElementById('pix-close-button').click()`});
+    for(let attempt=0;attempt<50;attempt++){
+      const ready=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`document.querySelector('.plan-card.vip [data-plan-request]')?.disabled===false`});
+      if(ready.result.value)break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    await cdp.send('Runtime.evaluate',{expression:`document.querySelector('.plan-card.vip [data-plan-request]').click()`});
+    let vipCheckout;
+    for(let attempt=0;attempt<50;attempt++){
+      const result=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+        const image=document.getElementById('pix-qr-image');
+        return {plan:document.getElementById('pix-plan')?.textContent,
+          amount:document.getElementById('pix-amount')?.textContent,
+          qrVisible:image?.hidden===false,qrLoaded:image?.naturalWidth>0,
+          request:window.__pixRequests[window.__pixRequests.length-1]?.body,
+          vipUnlocked:RabbitHubPlans.isVip()};
+      }())`});
+      vipCheckout=result.result.value;
+      if(vipCheckout.plan==='Plano VIP'&&vipCheckout.qrLoaded)break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert.equal(vipCheckout.plan,'Plano VIP');
+    assert.match(vipCheckout.amount,/R\$\s*9,90/);
+    assert.equal(vipCheckout.qrVisible,true);
+    assert.equal(vipCheckout.qrLoaded,true);
+    assert.deepEqual(vipCheckout.request,{planId:'vip'});
+    assert.equal(vipCheckout.vipUnlocked,false);
+    await captureScreenshot(cdp,'desktop-vip-pix-checkout');
+  } else {
 
   const evaluation = await cdp.send('Runtime.evaluate', {
     awaitPromise: true,
@@ -326,6 +554,34 @@ try {
   assert.equal(physicalDropdown.result.value.changes, 1, 'dropdown deve emitir um change por escolha');
   assert.equal(physicalDropdown.result.value.open, false, 'dropdown deve fechar ap\u00f3s a escolha');
 
+  const searchDesktop=await cdp.send('Runtime.evaluate', {awaitPromise:true,returnByValue:true,expression:`(async function(){
+    const plans=window.RabbitHubPlans,can=plans.can;
+    plans.can=function(feature){return feature==='searchAssist'||can.call(this,feature);};
+    localStorage.setItem('rh_vip_recent_searches_v1_ui-test_principal',JSON.stringify(['Naruto']));
+    const toggle=document.getElementById('open-search'),input=document.getElementById('search-input'),assist=document.getElementById('search-assist');
+    toggle.click();
+    const opened=!assist.hidden&&!!assist.querySelector('[data-search-suggestion]');
+    input.value='One Piece';input.dispatchEvent(new Event('input',{bubbles:true}));
+    input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));
+    const enterClosed=assist.hidden;
+    await new Promise(resolve=>setTimeout(resolve,450));
+    const stayedClosed=assist.hidden;
+    input.focus();input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));
+    await new Promise(resolve=>setTimeout(resolve,400));
+    const reopened=!assist.hidden;
+    const item=assist.querySelector('[data-search-suggestion]');
+    item.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    input.blur();item.click();
+    const chosen=input.value==='Naruto'&&assist.hidden;
+    input.focus();
+    document.body.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    const outsideClosed=assist.hidden;
+    toggle.click();plans.can=can;
+    return {opened,enterClosed,stayedClosed,reopened,chosen,outsideClosed};
+  }())`});
+  assert.ok(!searchDesktop.exceptionDetails, JSON.stringify(searchDesktop.exceptionDetails));
+  assert.deepEqual(searchDesktop.result.value,{opened:true,enterClosed:true,stayedClosed:true,reopened:true,chosen:true,outsideClosed:true});
+
   await cdp.send('Emulation.setDeviceMetricsOverride', {
     width: 390,
     height: 844,
@@ -333,6 +589,28 @@ try {
     mobile: true
   });
   await new Promise((resolve) => setTimeout(resolve, 250));
+  const mobileSearchOpen=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+    const plans=window.RabbitHubPlans;window.__uiSearchCan=plans.can;
+    plans.can=function(feature){return feature==='searchAssist'||window.__uiSearchCan.call(this,feature);};
+    document.getElementById('open-search').click();
+    return !document.getElementById('search-assist').hidden;
+  }())`});
+  assert.equal(mobileSearchOpen.result.value,true);
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width:390,height:500,deviceScaleFactor:1,mobile:true});
+  await new Promise(resolve=>setTimeout(resolve,100));
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await new Promise(resolve=>setTimeout(resolve,100));
+  const mobileSearchClosed=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+    const assist=document.getElementById('search-assist'),input=document.getElementById('search-input');
+    const closed=assist.hidden;
+    input.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));
+    const reopened=!assist.hidden;
+    document.getElementById('open-search').click();
+    window.RabbitHubPlans.can=window.__uiSearchCan;
+    delete window.__uiSearchCan;
+    return {closed,reopened};
+  }())`});
+  assert.deepEqual(mobileSearchClosed.result.value,{closed:true,reopened:true});
   const mobileEvaluation = await cdp.send('Runtime.evaluate', {
     awaitPromise: true,
     returnByValue: true,
@@ -405,6 +683,48 @@ try {
   assert.ok(mobile.config.horizontalOverflow <= 1, 'configuracoes nao devem ter rolagem horizontal');
   assert.equal(mobile.config.bodyOverflowY, 'auto');
   const mobileConfigScreenshot = await captureScreenshot(cdp, 'mobile-config');
+  const configCloseAfterScroll=await cdp.send('Runtime.evaluate', { awaitPromise:true,returnByValue:true,expression:`(async function(){
+    const body=document.getElementById('yc-sheet-body');
+    body.scrollTop=body.scrollHeight;
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    const button=document.getElementById('yc-config-close');
+    const bounds=button.getBoundingClientRect();
+    const visible=bounds.top>=0&&bounds.bottom<=innerHeight&&button.contains(document.elementFromPoint(bounds.left+bounds.width/2,bounds.top+bounds.height/2));
+    const backgroundLocked=getComputedStyle(document.body).overflow==='hidden';
+    button.click();
+    return {visible,backgroundLocked,closed:!document.getElementById('yc-sheet').classList.contains('open'),unlocked:getComputedStyle(document.body).overflow!=='hidden'};
+  }())` });
+  assert.deepEqual(configCloseAfterScroll.result.value,{visible:true,backgroundLocked:true,closed:true,unlocked:true});
+  await captureScreenshot(cdp, 'mobile-profile');
+  await cdp.send('Emulation.setDeviceMetricsOverride', {width:320,height:568,deviceScaleFactor:1,mobile:true});
+  const compactConfig=await cdp.send('Runtime.evaluate', {awaitPromise:true,returnByValue:true,expression:`(async function(){
+    document.querySelector('[data-yc-open="config"]').click();
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    const body=document.getElementById('yc-sheet-body'),box=body.getBoundingClientRect();
+    const close=document.getElementById('yc-config-close'),button=close.getBoundingClientRect();
+    const result={fits:box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight,
+      scrolls:body.scrollHeight>body.clientHeight,closeVisible:button.top>=box.top&&button.right<=box.right,
+      locked:getComputedStyle(document.body).overflow==='hidden'};
+    close.click();return result;
+  }())`});
+  assert.deepEqual(compactConfig.result.value,{fits:true,scrolls:true,closeVisible:true,locked:true});
+  await cdp.send('Emulation.setDeviceMetricsOverride', {width:390,height:844,deviceScaleFactor:1,mobile:true});
+  await cdp.send('Runtime.evaluate',{expression:"document.querySelector('[data-yc-open=\"config\"]').click()"});
+  await cdp.send('Emulation.setDeviceMetricsOverride', {width:667,height:375,deviceScaleFactor:1,mobile:true,
+    screenOrientation:{type:'landscapePrimary',angle:90}});
+  await new Promise(resolve=>setTimeout(resolve,200));
+  const landscapeConfig=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+    const sheet=document.getElementById('yc-sheet'),body=document.getElementById('yc-sheet-body');
+    const box=body.getBoundingClientRect(),close=document.getElementById('yc-config-close');
+    const button=close.getBoundingClientRect();
+    const result={fits:box.left>=0&&box.right<=innerWidth&&box.top>=0&&box.bottom<=innerHeight,
+      scrolls:body.scrollHeight>body.clientHeight,closeVisible:button.top>=box.top&&button.right<=box.right,
+      locked:getComputedStyle(document.body).overflow==='hidden',open:sheet.classList.contains('open')};
+    close.click();return result;
+  }())`});
+  assert.deepEqual(landscapeConfig.result.value,{fits:true,scrolls:true,closeVisible:true,locked:true,open:true});
+  await cdp.send('Emulation.setDeviceMetricsOverride', {width:390,height:844,deviceScaleFactor:1,mobile:true,
+    screenOrientation:{type:'portraitPrimary',angle:0}});
 
   const accountEvaluation = await cdp.send('Runtime.evaluate', {
     awaitPromise: true,
@@ -412,7 +732,6 @@ try {
     expression: `(async function(){
       const nextFrame=()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
       const rect=(element)=>{const value=element.getBoundingClientRect();return {top:value.top,right:value.right,bottom:value.bottom,left:value.left,width:value.width,height:value.height};};
-      document.getElementById('yc-config-close').click();
       await new Promise(resolve=>setTimeout(resolve,20));
       await nextFrame();
       const accountButton=document.querySelector('[data-yc-action="conta"]');
@@ -590,6 +909,52 @@ try {
   assert.equal(desktopSheets.supportInternalHeaderDisplay, 'none');
   const desktopSupportScreenshot = await captureScreenshot(cdp, 'desktop-support');
 
+  const openPlans=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+    document.getElementById('yc-sheet-back').click();
+    const tile=document.querySelector('[data-yc-open="planos"]');
+    if(!tile)return false;
+    tile.click();
+    return document.getElementById('yc-sheet')?.getAttribute('data-sheet-kind')==='planos';
+  }())`});
+  assert.equal(openPlans.result.value,true,'a página de planos deve abrir');
+  for(const viewport of [
+    {name:'desktop',width:1440,height:1000,mobile:false},
+    {name:'mobile',width:390,height:844,mobile:true},
+    {name:'small-mobile',width:320,height:568,mobile:true}
+  ]){
+    await cdp.send('Emulation.setDeviceMetricsOverride',{
+      width:viewport.width,height:viewport.height,deviceScaleFactor:1,mobile:viewport.mobile
+    });
+    let page;
+    for(let attempt=0;attempt<50;attempt++){
+      const result=await cdp.send('Runtime.evaluate',{returnByValue:true,expression:`(function(){
+        const body=document.querySelector('#yc-sheet .yc-sheet-body');
+        const vip=body?.querySelector('.plan-card.vip');
+        const plus=body?.querySelector('.plan-card.plus');
+        return {viewport:innerWidth,overflow:body?body.scrollWidth-body.clientWidth:999,
+          vipPrice:vip?.querySelector('.plan-card-price')?.textContent.trim(),
+          plusPrice:plus?.querySelector('.plan-card-price')?.textContent.trim(),
+          vipId:vip?.querySelector('.plan-request-btn')?.dataset.planId,
+          plusId:plus?.querySelector('.plan-request-btn')?.dataset.planId,
+          hasClientAmount:!!body?.querySelector('[data-amount], [data-price]')};
+      }())`});
+      page=result.result.value;
+      if(page.vipPrice?.includes('9,90')&&page.plusPrice?.includes('19,90'))break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert.equal(page.viewport,viewport.width);
+    assert.ok(page.overflow<=1,'planos não devem transbordar em '+viewport.name);
+    assert.match(page.vipPrice,/R\$\s*9,90/);
+    assert.match(page.plusPrice,/R\$\s*19,90/);
+    assert.equal(page.vipId,'vip');
+    assert.equal(page.plusId,'plus');
+    assert.equal(page.hasClientAmount,false);
+    await captureScreenshot(cdp,viewport.name+'-plans');
+  }
+  await cdp.send('Emulation.setDeviceMetricsOverride',{
+    width:1440,height:1000,deviceScaleFactor:1,mobile:false
+  });
+
   async function auditResponsivePage(relativeUrl, viewport) {
     await cdp.send('Emulation.setDeviceMetricsOverride', {
       width: viewport.width,
@@ -604,6 +969,14 @@ try {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     await new Promise((resolve) => setTimeout(resolve, 220));
+    if (relativeUrl.startsWith('/affiliate.html')) {
+      for (let attempt=0;attempt<30;attempt++) {
+        const styled=await cdp.send('Runtime.evaluate', { returnByValue:true,
+          expression:"parseFloat(getComputedStyle(document.querySelector('.brand img')).width)<=40" });
+        if (styled.result.value) break;
+        await new Promise(resolve=>setTimeout(resolve,50));
+      }
+    }
     const audit = await cdp.send('Runtime.evaluate', {
       returnByValue:true,
       expression:`(function(){
@@ -617,6 +990,30 @@ try {
         const headerTitle=document.querySelector('.otk-header-fixed .header-title,.otk-header-fixed .header-title-text');
         const innerRect=headerInner&&headerInner.getBoundingClientRect();
         const titleRect=headerTitle&&headerTitle.getBoundingClientRect();
+        const cast=location.pathname.endsWith('/player-animes.html')&&document.getElementById('dk-cast-modal');
+        let castBounds=null;
+        if(cast){
+          cast.hidden=false;
+          const card=cast.querySelector('.dk-cast-card').getBoundingClientRect();
+          const hit=document.elementFromPoint(card.left+card.width/2,card.top+card.height/2);
+          castBounds={top:card.top,bottom:card.bottom,left:card.left,right:card.right,hit:!!(hit&&hit.closest('#dk-cast-modal'))};
+          cast.hidden=true;
+        }
+        let expandedOverflow=null,expandedOutliers=[];
+        if(['/affiliate.html','/affiliates-admin.html','/simulator-admin.html','/partners.html'].some(path=>location.pathname.endsWith(path))){
+          const panels=[document.getElementById('workspace'),document.getElementById('app'),document.getElementById('content')].filter(Boolean);
+          if(location.pathname.endsWith('/affiliates-admin.html'))panels.push(...document.querySelectorAll('#app section[data-panel]:not([data-panel="simulator"])'));
+          const hiddenPanels=panels.filter(node=>node.hidden);
+          hiddenPanels.forEach(node=>node.hidden=false);
+          expandedOverflow=Math.max(0,root.scrollWidth-root.clientWidth);
+          expandedOutliers=Array.from(document.querySelectorAll('body *'))
+            .filter(node=>node.getClientRects().length).map(node=>({node,rect:node.getBoundingClientRect()}))
+            .filter(item=>!item.node.closest('.sidebar nav,.tabs,#campaign-table') &&
+              (item.rect.left<-1||item.rect.right>${viewport.width}+1))
+            .slice(0,15).map(item=>item.node.tagName.toLowerCase()+' '+(item.node.id||item.node.className||'')+' '+Math.round(item.rect.left)+'..'+Math.round(item.rect.right));
+          hiddenPanels.forEach(node=>node.hidden=true);
+          void root.offsetWidth;
+        }
         return {
           path:location.pathname,
           search:location.search,
@@ -628,10 +1025,12 @@ try {
           detailsMenuExists:details?Boolean(document.getElementById('menu-btn')):null,
           detailsBackDisplay:details&&back?getComputedStyle(back).display:null,
           detailsHeaderLeft:details&&header?Math.round(header.getBoundingClientRect().left):null,
-          headerTitleCenterDelta:innerRect&&titleRect?Math.round(Math.abs((titleRect.left+titleRect.width/2)-(innerRect.left+innerRect.width/2))):null
+          headerTitleCenterDelta:innerRect&&titleRect?Math.round(Math.abs((titleRect.left+titleRect.width/2)-(innerRect.left+innerRect.width/2))):null,
+          castBounds,expandedOverflow,expandedOutliers
         };
       }())`
     });
+    if(!audit.result.value)throw new Error(JSON.stringify(audit.exceptionDetails||audit));
     return audit.result.value;
   }
 
@@ -645,13 +1044,20 @@ try {
     '/detalhes.html?id=layout-audit',
     '/player-animes.html?anime=layout-audit&ep=1',
     '/chat.html?layout-audit=1',
-    '/admin.html?layout-audit=1'
+    '/admin.html?layout-audit=1',
+    '/affiliate.html?layout-audit=1',
+    '/affiliates-admin.html?layout-audit=1',
+    '/simulator-admin.html?layout-audit=1',
+    '/partners.html?layout-audit=1',
+    '/404.html?layout-audit=1'
   ];
   const responsiveAudit=[];
   for (const viewport of [
     {name:'small-mobile',width:320,height:568,mobile:true},
     {name:'mobile',width:390,height:844,mobile:true},
+    {name:'mobile-landscape',width:667,height:375,mobile:true},
     {name:'tablet',width:768,height:1024,mobile:true},
+    {name:'tablet-landscape',width:1024,height:768,mobile:true},
     {name:'laptop',width:1366,height:768,mobile:false},
     {name:'full-hd',width:1920,height:1080,mobile:false},
     {name:'tv-4k',width:3840,height:2160,mobile:false}
@@ -660,6 +1066,10 @@ try {
       const pageAudit=await auditResponsivePage(page,viewport);
       pageAudit.mode=viewport.name;
       responsiveAudit.push(pageAudit);
+      if (((viewport.name==='small-mobile'||viewport.name==='mobile-landscape') && !page.includes('tab=')) ||
+          (viewport.name==='laptop' && ['/index.html?layout-audit=1','/detalhes.html?id=layout-audit','/player-animes.html?anime=layout-audit&ep=1'].includes(page))) {
+        await captureScreenshot(cdp, 'layout-'+viewport.name+'-'+new URL(page,origin).pathname.slice(1).replace('.html',''));
+      }
       assert.equal(pageAudit.path,new URL(page,origin).pathname,'navegação deve chegar à página solicitada');
       assert.equal(pageAudit.viewport,viewport.width,page+' deve respeitar a viewport '+viewport.name);
       assert.ok(pageAudit.documentOverflow<=1,page+' nao pode criar rolagem horizontal em '+viewport.name);
@@ -672,6 +1082,17 @@ try {
         assert.equal(pageAudit.detailsMenuExists,false,'detalhes deve ter somente o botao Voltar em '+viewport.name);
         assert.notEqual(pageAudit.detailsBackDisplay,'none','botao Voltar deve permanecer visivel em '+viewport.name);
         assert.equal(pageAudit.detailsHeaderLeft,0,'cabecalho de detalhes deve ocupar a largura toda em '+viewport.name);
+      }
+      if (pageAudit.path==='/player-animes.html' && viewport.width<=390) {
+        assert.ok(pageAudit.castBounds.top>=0 && pageAudit.castBounds.bottom<=viewport.height,
+          'modal Cast deve caber na altura do celular '+viewport.name);
+        assert.ok(pageAudit.castBounds.left>=0 && pageAudit.castBounds.right<=viewport.width,
+          'modal Cast deve caber na largura do celular '+viewport.name);
+        assert.equal(pageAudit.castBounds.hit,true,'modal Cast deve permanecer clicável acima do vídeo em '+viewport.name);
+      }
+      if (pageAudit.expandedOverflow!==null) {
+        assert.ok(pageAudit.expandedOverflow<=1,page+' forms nao podem criar rolagem horizontal em '+viewport.name);
+        assert.deepEqual(pageAudit.expandedOutliers,[],page+' controles devem caber em '+viewport.name);
       }
     }
   }
@@ -823,9 +1244,16 @@ try {
   navigationAudit.push({case:'Fechar aba e reabrir Player (sessão simulada)',state:await assertRoute(newClient,'/player-animes.html')});
   console.log(JSON.stringify({navigationAudit},null,2));
   console.log(JSON.stringify({responsiveAudit},null,2));
-  fs.writeFileSync(path.join(projectRoot,'.cache','ui-regression','runtime-errors.json'),JSON.stringify(runtimeErrors,null,2));
-  assert.equal(runtimeErrors.length,0,'nenhuma exceção JavaScript não tratada; ver runtime-errors.json');
+  // As telas legadas de afiliados dependem do SDK remoto, bloqueado por esta fixture offline.
+  const unexpectedRuntimeErrors=runtimeErrors.filter(error=>{
+    const description=error.exception&&error.exception.description||'';
+    return !(/\/(affiliate-dashboard|simulator-admin)\.js$/.test(error.url||'') &&
+      description.startsWith('ReferenceError: firebase is not defined'));
+  });
+  fs.writeFileSync(path.join(projectRoot,'.cache','ui-regression','runtime-errors.json'),JSON.stringify(unexpectedRuntimeErrors,null,2));
+  assert.equal(unexpectedRuntimeErrors.length,0,'nenhuma exceção JavaScript não tratada; ver runtime-errors.json');
   console.log(JSON.stringify({ screenshots:[mobileConfigScreenshot,mobileAccountScreenshot,mobileSupportScreenshot,desktopSupportScreenshot] }, null, 2));
+  }
 } finally {
   if(browserClient&&browser&&browser.exitCode===null){
     try{await Promise.race([browserClient.send('Browser.close'),new Promise(resolve=>setTimeout(resolve,2500))]);}catch(ignored){}
