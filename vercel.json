@@ -5,7 +5,11 @@
   "outputDirectory": "public",
   "functions": {
     "api/affiliates.mjs": { "maxDuration": 30 },
-    "api/stream.mjs": { "maxDuration": 60 }
+    "api/stream.mjs": { "maxDuration": 60 },
+    "api/pix-order.js": { "maxDuration": 30 },
+    "api/mercado-pago-webhook.js": { "maxDuration": 30 },
+    "api/pix-status.js": { "maxDuration": 30 },
+    "api/pix-orders.js": { "maxDuration": 30 }
   },
   "rewrites": [
     { "source": "/api/affiliates/:action", "destination": "/api/affiliates?action=:action" },

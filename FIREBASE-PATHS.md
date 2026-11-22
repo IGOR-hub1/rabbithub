@@ -2,7 +2,7 @@
 
 ## Parceiros e indicações (primeira etapa)
 
-O sistema de parceiros usa o **Realtime Database** do projeto `animes-64408`, assim como as contas e o painel ativos. O Firestore continua fechado em `firestore.rules`; não é necessário ativá-lo. `partners/{uid}` vincula o parceiro ao UID do Firebase Authentication. `referralLinks/{code}` associa o código ao parceiro; `referralClicks/{id}` registra código, UID do parceiro, identificador aleatório de visitante e horário, sem IP; `referralVisitorClicks/{visitorId}` permite verificar qual foi o último clique válido do mesmo navegador antes do cadastro; `referrals/{uid}` fixa a atribuição na conta; `conversions/{uid}_{planUpdatedAt}` registra a concessão de VIP. `commissions`, `payouts` e `affiliateSettings` ficam reservados e fechados para etapas futuras.
+O sistema de parceiros usa o **Realtime Database** do projeto `animes-64408`, assim como as contas e o painel ativos. O Firestore é usado separadamente pelos pedidos Pix, com acesso de cliente negado pelas regras. `partners/{uid}` vincula o parceiro ao UID do Firebase Authentication. `referralLinks/{code}` associa o código ao parceiro; `referralClicks/{id}` registra código, UID do parceiro, identificador aleatório de visitante e horário, sem IP; `referralVisitorClicks/{visitorId}` permite verificar qual foi o último clique válido do mesmo navegador antes do cadastro; `referrals/{uid}` fixa a atribuição na conta; `conversions/{uid}_{planUpdatedAt}` registra a concessão de VIP. `commissions`, `payouts` e `affiliateSettings` ficam reservados e fechados para etapas futuras.
 
 Publique `API ANIMES E CHAT/database.rules.json` antes do novo servidor. As regras impedem gravação direta nesses caminhos. Apenas o titular autenticado pode ler seu registro em `partners/{uid}` e `referrals/{uid}`; relatórios completos passam pelo endpoint administrativo.
 
@@ -26,11 +26,11 @@ O Drawer de `admin.html` abre `affiliates-admin.html` na própria seção Parcei
 
 Ative `simulationEnabled` em Configurações e autorize explicitamente um UID existente em `affiliateTestAccounts/{uid}`. A área “Simulador de Compras” cria um percurso em `simulationFlows/{id}` com visita e cadastro **simulados**, ambos marcados `isSimulation: true`. A compra de VIP ou Plus pode ficar pendente, ser recusada, aprovada ou estornada. A comissão simulada é calculada a partir da regra percentual do parceiro ou padrão; somente uma compra aprovada mantém valor de comissão. Cada atualização exige um `requestId` único, usa comparação de versão do Firebase e devolve a mesma resposta quando o identificador é repetido. A limpeza requer a frase `LIMPAR SIMULACOES`, apaga somente `simulationFlows` e registra o ato na auditoria.
 
-Os fluxos simulados não alteram `users`, planos, `conversions`, `commissions`, `payouts` ou reservas financeiras. O parceiro recebe apenas seus próprios resultados simulados em uma aba separada, sem UID dos usuários de teste e sem saldo sacável. Registros antigos com `status: simulated` nas conversões reais são excluídos das estatísticas e das comissões reais. `lib/payment-gateway.js` define apenas uma interface para integração futura; nenhum gateway, chave ou webhook está ativo. Publique a regra fechada de `affiliateTestAccounts` e `simulationFlows` antes de disponibilizar o simulador.
+Os fluxos simulados não alteram `users`, planos, `conversions`, `commissions`, `payouts` ou reservas financeiras. O parceiro recebe apenas seus próprios resultados simulados em uma aba separada, sem UID dos usuários de teste e sem saldo sacável. Registros antigos com `status: simulated` nas conversões reais são excluídos das estatísticas e das comissões reais. `lib/payment-gateway.js` define apenas uma interface para integração futura; o simulador de afiliados não usa o gateway Pix nem altera planos reais. Publique a regra fechada de `affiliateTestAccounts` e `simulationFlows` antes de disponibilizar o simulador.
 
 O site usa um único projeto: **`animes-64408`**. Todas as funções ativas abaixo usam o **Realtime Database** desse projeto e o Firebase Authentication do mesmo projeto.
 
-O projeto não usa Firebase Storage nem Firestore. Os arquivos de banner permanecem em URLs HTTPS externas; somente nome, categoria e URL são gravados no banco. `storage.rules` e `firestore.rules` negam explicitamente toda leitura e escrita para que esses serviços não fiquem expostos por engano.
+O projeto não usa Firebase Storage. O Firestore armazena somente pedidos Pix pelo backend. Os arquivos de banner permanecem em URLs HTTPS externas; somente nome, categoria e URL são gravados no banco. `storage.rules` e `firestore.rules` negam explicitamente toda leitura e escrita para que esses serviços não fiquem expostos por engano.
 
 ## Caminhos usados em produção
 
@@ -70,7 +70,7 @@ O projeto não usa Firebase Storage nem Firestore. Os arquivos de banner permane
 
 ## Código legado que não está ativo
 
-`dk-realtime.js` e `site-status.js` contêm integrações antigas com Firestore/FCM, mas não são carregados pelas telas atuais. As funções ativas não dependem de Firestore nem de Firebase Storage.
+`dk-realtime.js` e `site-status.js` contêm integrações antigas com Firestore/FCM, mas não são carregados pelas telas atuais. As funções de pedidos Pix dependem do Firestore; as demais funções ativas não dependem de Firebase Storage.
 
 Histórico e progresso são privados e disponíveis para Free e VIP. Os caminhos VIP (`animeAlerts`, `backups`, temas personalizados e quantidade adicional de perfis) também possuem validação de plano nas regras. O frontend não é a fronteira de segurança.
 

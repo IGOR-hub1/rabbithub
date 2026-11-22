@@ -800,6 +800,12 @@ async function handleRequest(req, res) {
     res.writeHead(204, safeHeaders(CORS_HEADERS)); return res.end();
   }
 
+  if (parsed.pathname === '/api/plans') return require('./api/plans')(req,res);
+  if (parsed.pathname === '/api/pix-order') return require('./api/pix-order')(req,res);
+  if (parsed.pathname === '/api/pix-status') return require('./api/pix-status')(req,res);
+  if (parsed.pathname === '/api/pix-orders') return require('./api/pix-orders')(req,res);
+  if (parsed.pathname === '/api/mercado-pago-webhook') return require('./api/mercado-pago-webhook')(req,res);
+
   if (parsed.pathname === '/api/proxy') {
     req.query = parsed.query;
     if (req.method === 'POST') req.body = await readBody(req);
