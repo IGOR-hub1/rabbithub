@@ -1,0 +1,20 @@
+{
+  "name": "draksyon",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Servidor local do X-Bunny Animes",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js",
+    "build": "node scripts/build.mjs",
+    "test:ui": "node scripts/ui-regression.mjs",
+    "test:affiliate:deploy": "node scripts/affiliate-deploy-smoke.mjs",
+    "test:history": "node scripts/history-browser.mjs",
+    "test": "node --test scripts/*.test.js",
+    "security:preflight": "node scripts/security-preflight.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

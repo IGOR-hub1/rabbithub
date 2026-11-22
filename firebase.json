@@ -1,0 +1,8 @@
+{
+  "database": {
+    "rules": "API ANIMES E CHAT/database.rules.json"
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}
