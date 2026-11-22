@@ -752,7 +752,7 @@ body{padding-top:65px}
 }
 
 </style>
-<link rel="stylesheet" href="app-refresh.css?v=20261111-1">
+<link rel="stylesheet" href="app-refresh.css?v=20261121-3">
 <link rel="stylesheet" href="rh-dropdowns.css?v=20261104-3">
 <script src="app-refresh.js?v=20261105-1" defer></script>
 <script src="rh-dropdowns.js?v=20261104-3" defer></script>
@@ -979,6 +979,11 @@ body{padding-top:65px}
     var searchInput = document.getElementById('search-input');
     var searchAssist = document.getElementById('search-assist');
     var openSearchBtn = document.getElementById('open-search');
+    var searchAssistAllowed = false;
+    var searchKeyboardBaseline = 0;
+    var searchKeyboardMinimum = 0;
+    var searchKeyboardSeen = false;
+    var searchAssistTouching = false;
     var drawer = document.getElementById('drawer');
     var drawerOverlay = document.getElementById('drawer-overlay');
     var openDrawerBtn = document.getElementById('open-drawer');
@@ -1024,7 +1029,8 @@ body{padding-top:65px}
         }else{
             html+='<p>'+(query?'Nenhuma sugestão encontrada.':'Suas próximas pesquisas aparecerão aqui.')+'</p>';
         }
-        searchAssist.innerHTML=html;searchAssist.hidden=false;
+        searchAssist.innerHTML=html;
+        searchAssist.hidden=!searchAssistAllowed || !searchBox.classList.contains('show');
     }
 
     var scraperPagination = document.getElementById('scraper-pagination');
@@ -2106,7 +2112,8 @@ body{padding-top:65px}
             currentPlan = (_access && _access.ready ? _access.name : '') ||
                 (window.DK_USER && (DK_USER.plan || DK_USER.currentPlan)) ||
                 _session.plan || _session.currentPlan || _plan || profile.plan || currentPlan;
-            currentPlan = /vip|pro|premium/i.test(String(currentPlan)) ? 'VIP' : 'Free';
+            currentPlan = /^plus$/i.test(String(currentPlan)) ? 'Plus' :
+                /vip|pro|premium/i.test(String(currentPlan)) ? 'VIP' : 'Free';
         } catch(e){}
 
         var profileBio = window.RabbitHubProfileData && window.RabbitHubProfileData.getCachedBio
@@ -2339,7 +2346,7 @@ body{padding-top:65px}
         function renderPlanos(){
             var access = window.RabbitHubPlans && window.RabbitHubPlans.get ? window.RabbitHubPlans.get() : {name:'Free'};
             var activeKey = String(access.key || '').toLowerCase();
-            var vipActive = access.isVip === true || /vip|pro|premium/i.test(String(access.name || ''));
+            var vipActive = activeKey === 'vip';
             function card(key, name, badge, description, features, active, buttonText){
                 var items = features.map(function(item){
                     var roadmap = item && typeof item === 'object' && item.roadmap === true;
@@ -2347,10 +2354,10 @@ body{padding-top:65px}
                     return '<li class="' + (roadmap ? 'is-roadmap' : '') + '"><span>' + escapeHtml(label) + '</span>' + (roadmap ? '<small>Em breve</small>' : '') + '</li>';
                 }).join('');
                 return '<article class="plan-card ' + key + (active ? ' current' : '') + '">' +
-                    '<div class="plan-card-head"><div><div class="plan-card-name">' + escapeHtml(name) + '</div><div class="plan-card-price">' + (key === 'free' ? 'Para começar' : key === 'vip' ? 'Experiência completa' : 'Próxima evolução') + '</div></div><span class="plan-card-badge">' + escapeHtml(badge) + '</span></div>' +
+                    '<div class="plan-card-head"><div><div class="plan-card-name">' + escapeHtml(name) + '</div><div class="plan-card-price">' + (key === 'free' ? 'Para começar' : 'Valor indisponível') + '</div></div><span class="plan-card-badge">' + escapeHtml(badge) + '</span></div>' +
                     '<p class="plan-card-description">' + escapeHtml(description) + '</p>' +
                     '<ul class="plan-card-features">' + items + '</ul>' +
-                    '<button class="plan-request-btn" type="button"' + (!active && key !== 'free' ? ' data-plan-request="' + escapeHtml(name) + '"' : '') + (active || key === 'free' ? ' disabled' : '') + '>' + escapeHtml(buttonText) + '</button>' +
+                    '<button class="plan-request-btn" type="button"' + (key !== 'free' ? ' data-plan-id="' + key + '"' : '') + (!active && key !== 'free' ? ' data-plan-request="' + escapeHtml(name) + '"' : '') + ' disabled>' + escapeHtml(buttonText) + '</button>' +
                 '</article>';
             }
             return '<section class="reference-screen plans-reference-screen">' +
@@ -2379,7 +2386,7 @@ body{padding-top:65px}
                         'Gestos avançados no player',
                         'Backup e exportação do perfil',
                         {text:'Favoritos sincronizados entre dispositivos', roadmap:true}
-                    ], vipActive, vipActive ? 'Plano atual' : 'Solicitar VIP') +
+                    ], vipActive, vipActive ? 'Plano atual' : 'Assinar VIP') +
                     card('plus','Plus','Em desenvolvimento','A experiência mais avançada do X-Bunny Animes, construída para quem quer ir além.', [
                         'Tudo do plano VIP',
                         {text:'IA avançada que aprende suas preferências', roadmap:true},
@@ -2388,9 +2395,9 @@ body{padding-top:65px}
                         {text:'Personalização avançada de transições e efeitos', roadmap:true},
                         {text:'Acesso antecipado a novas funções', roadmap:true},
                         {text:'Atendimento prioritário', roadmap:true}
-                    ], activeKey === 'plus', activeKey === 'plus' ? 'Plano atual' : 'Entrar na lista de espera') +
-                '</div></div>' +
-                '<p class="reference-screen-footer plan-contact-note" id="plan-contact-note" role="status">A ativação e a lista de espera são tratadas pela equipe após o seu contato.</p></section>';
+                    ], activeKey === 'plus', activeKey === 'plus' ? 'Plano atual' : 'Assinar Plus') +
+                '</div><section class="pix-history" aria-labelledby="pix-history-title"><h4 id="pix-history-title">Meus pedidos Pix</h4><div id="pix-history-list" role="status">Consultando pedidos...</div></section></div>' +
+                '<p class="reference-screen-footer plan-contact-note" id="plan-contact-note" role="status">Os pedidos e seus estados são confirmados pelo Mercado Pago.</p></section>';
         }
         function renderConfig(){
             var access = window.RabbitHubPlans && window.RabbitHubPlans.get ? window.RabbitHubPlans.get() : {name:'Free',customTheme:false};
@@ -2419,14 +2426,14 @@ body{padding-top:65px}
                 return '<button class="profile-banner-option' + (item.key === visual.banner ? ' active' : '') + '" type="button" data-profile-banner="' + item.key + '" data-banner-type="' + item.type + '" data-banner-category="' + category + '" aria-label="Usar banner ' + escapeHtml(item.name) + '" aria-pressed="' + (item.key === visual.banner ? 'true' : 'false') + '">' +
                     preview + '<span class="profile-banner-label"><strong>' + label + '</strong><small>' + escapeHtml(item.name) + '</small></span></button>';
             }).join('');
-            return '<div class="settings-hero">' +
+            return '<button class="yc-config-close" id="yc-config-close" type="button" aria-label="Fechar personalização" title="Fechar">' +
+                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
+                '</button>' +
+                '<div class="settings-hero">' +
                     '<div class="settings-hero-kicker">Visual do perfil</div>' +
                     '<h3>Personalize seu espaço</h3>' +
                     '<p>Escolha um dos banners do X-Bunny Animes para destacar seu perfil.</p>' +
                 '</div>' +
-                '<button class="yc-config-close" id="yc-config-close" type="button" aria-label="Fechar personalização" title="Fechar">' +
-                    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>' +
-                '</button>' +
                 '<div class="profile-banner-card"><div class="profile-banner-heading"><strong>FOTO DO PERFIL</strong></div>' +
                   '<label class="profile-photo-picker">Escolher imagem<input id="profile-photo-input" type="file" accept="image/jpeg,image/png,image/webp"></label>' +
                   '<p class="profile-banner-status" id="profile-photo-status" role="status">JPG, PNG ou WEBP · até 8 MB · recorte automático</p></div>' +
@@ -2556,7 +2563,7 @@ body{padding-top:65px}
             var planAccess = window.RabbitHubPlans && window.RabbitHubPlans.get ? window.RabbitHubPlans.get() : {};
             var isVip = normalizedAccountPlan.isVip;
             expiry=normalizedAccountPlan.expiresAt;
-            var plan = isVip ? 'VIP' : 'Free';
+            var plan = normalizedAccountPlan.name;
             var expiryLabel = expiry ? (expiry <= Date.now() ? 'Expirado em ' + formatAccountDate(expiry) : 'Até ' + formatAccountDate(expiry)) : 'Sem expiração';
             var profiles = accountProfiles(uid,user,accountProfile,data);
             var activeProfile = {};
@@ -2644,33 +2651,182 @@ body{padding-top:65px}
                 }
             });
         }
+        var officialPlanPrices=null;
+        function formatPlanPrice(cents){
+            return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(cents/100);
+        }
+        function loadPlanPrices(){
+            officialPlanPrices=null;
+            var cards = sheetBody.querySelectorAll('.plans-reference-screen .plan-card');
+            fetch('/api/plans',{cache:'no-store'}).then(function(response){
+                if(!response.ok)throw new Error('Preços indisponíveis.');
+                return response.json();
+            }).then(function(data){
+                if(!data || data.ok!==true || !Array.isArray(data.plans))throw new Error('Tabela de preços inválida.');
+                var prices={};
+                data.plans.forEach(function(plan){
+                    if(plan && (plan.id==='vip'||plan.id==='plus') && plan.currency==='BRL' &&
+                       Number.isSafeInteger(plan.amountCents) && plan.amountCents>0)prices[plan.id]=plan.amountCents;
+                });
+                if(!prices.vip||!prices.plus)throw new Error('Tabela de preços incompleta.');
+                officialPlanPrices=prices;
+                cards.forEach(function(card){
+                    var id=card.classList.contains('vip')?'vip':card.classList.contains('plus')?'plus':'';
+                    if(!id || !card.isConnected)return;
+                    card.querySelector('.plan-card-price').textContent=formatPlanPrice(prices[id]);
+                    var button=card.querySelector('[data-plan-request]');
+                    if(button)button.disabled=false;
+                });
+            }).catch(function(){
+                var note=sheetBody.querySelector('#plan-contact-note');
+                if(note)note.textContent='Não foi possível consultar os preços oficiais agora. Tente novamente em instantes.';
+            });
+        }
+        function showPixCheckout(order,requestedPlanId){
+            if(!order||order.ok!==true||order.status!=='pending'||
+               order.planId!==requestedPlanId||order.currency!=='BRL'||
+               !Number.isSafeInteger(order.amountCents)||order.amountCents<=0||
+               !officialPlanPrices||order.amountCents!==officialPlanPrices[requestedPlanId]||
+               typeof order.orderId!=='string'||typeof order.pixCopyPaste!=='string'||!order.pixCopyPaste)
+                throw new Error('Resposta Pix inválida. Tente novamente.');
+            sheetBody.innerHTML='<section class="reference-screen pix-checkout" aria-labelledby="pix-title">' +
+                '<div class="reference-screen-head"><div class="reference-screen-brand"><span class="reference-screen-icon" aria-hidden="true">' + referenceScreenIcon('plans') + '</span><div><span class="reference-screen-kicker">PAGAMENTO SEGURO</span><h3 id="pix-title">Pagamento Pix</h3></div></div></div>' +
+                '<div class="pix-checkout-body"><div class="pix-order-summary"><span id="pix-plan"></span><strong id="pix-amount"></strong></div>' +
+                '<p class="pix-payment-status" id="pix-status" role="status" aria-live="polite">Aguardando pagamento</p>' +
+                '<div class="pix-qr-wrap"><img id="pix-qr-image" alt="QR Code Pix para pagamento" hidden><p id="pix-qr-fallback" hidden>O QR visual não está disponível neste ambiente. Use o Pix Copia e Cola abaixo.</p></div>' +
+                '<label class="pix-code-label" for="pix-copy-code">Pix Copia e Cola</label>' +
+                '<textarea id="pix-copy-code" readonly rows="3" aria-label="Código Pix Copia e Cola"></textarea>' +
+                '<div class="pix-checkout-actions"><button type="button" id="pix-copy-button">Copiar código Pix</button><button type="button" id="pix-close-button">Voltar aos planos</button></div>' +
+                '<p class="pix-copy-feedback" id="pix-copy-feedback" role="status" aria-live="polite"></p>' +
+                '<p class="pix-order-note">Fechar esta tela não cancela o pedido. Após a confirmação do Mercado Pago, o plano é atualizado automaticamente na sua conta.</p></div></section>';
+            var panel=sheetBody.querySelector('.pix-checkout');
+            panel.dataset.orderId=order.orderId;
+            panel.dataset.statusSource='backend';
+            sheetBody.querySelector('#pix-plan').textContent=order.planId==='vip'?'Plano VIP':'Plano Plus';
+            sheetBody.querySelector('#pix-amount').textContent=formatPlanPrice(order.amountCents);
+            var code=sheetBody.querySelector('#pix-copy-code');
+            code.value=order.pixCopyPaste;
+            var image=sheetBody.querySelector('#pix-qr-image');
+            var base64=typeof order.qrCodeBase64==='string'?order.qrCodeBase64:'';
+            if(base64&&/^[A-Za-z0-9+/=]+$/.test(base64)){
+                image.src='data:image/'+(base64.indexOf('iVBOR')===0?'png':'jpeg')+';base64,'+base64;
+                image.hidden=false;
+                image.onerror=function(){image.hidden=true;sheetBody.querySelector('.pix-qr-wrap').classList.add('is-empty');sheetBody.querySelector('#pix-qr-fallback').hidden=false;};
+            }else{
+                sheetBody.querySelector('.pix-qr-wrap').classList.add('is-empty');
+                sheetBody.querySelector('#pix-qr-fallback').hidden=false;
+            }
+            sheetBody.querySelector('#pix-close-button').addEventListener('click',function(){openSheet('planos');});
+            sheetBody.querySelector('#pix-copy-button').addEventListener('click',function(){
+                var button=this,feedback=sheetBody.querySelector('#pix-copy-feedback');
+                function copied(){feedback.textContent='Código Pix copiado.';button.textContent='Copiado!';}
+                function fallback(){
+                    code.focus();code.select();
+                    try{if(document.execCommand('copy')){copied();return;}}catch(e){}
+                    feedback.textContent='Selecione e copie o código Pix acima.';
+                }
+                if(navigator.clipboard&&navigator.clipboard.writeText)
+                    navigator.clipboard.writeText(code.value).then(copied,fallback);
+                else fallback();
+            });
+            sheetBody.scrollTop=0;
+            function checkVerifiedStatus(){
+                if(!panel.isConnected)return;
+                var state=window.RabbitHubSession&&window.RabbitHubSession.get&&window.RabbitHubSession.get();
+                var user=state&&state.authUser;
+                if(!state||state.status!=='authenticated'||!user||typeof user.getIdToken!=='function')return;
+                Promise.resolve(user.getIdToken(false)).then(function(token){
+                    return fetch('/api/pix-status?orderId='+encodeURIComponent(order.orderId),{
+                        headers:{Authorization:'Bearer '+token},cache:'no-store'});
+                }).then(function(response){return response.json().then(function(data){if(!response.ok)throw new Error('Status indisponível.');return data;});})
+                .then(function(data){
+                    if(!panel.isConnected||data.ok!==true||data.orderId!==order.orderId||
+                       data.planId!==order.planId||data.amountCents!==order.amountCents||data.currency!=='BRL')return;
+                    var labels={pending:'Aguardando pagamento',approved:data.activatedAt?'Plano ativado':'Pagamento confirmado · ativando plano',
+                        rejected:'Pagamento recusado',canceled:'Pagamento cancelado',expired:'Pagamento expirado',
+                        reversed:'Pagamento revertido'};
+                    if(!labels[data.status])return;
+                    var status=panel.querySelector('#pix-status');
+                    status.textContent=labels[data.status];
+                    status.dataset.verifiedStatus=data.status;
+                    if(data.status==='approved'&&data.activatedAt&&!panel.dataset.planSynced&&
+                       window.RabbitHubSession&&window.RabbitHubSession.readAccount){
+                        panel.dataset.planSynced='1';
+                        window.RabbitHubSession.readAccount().catch(function(){panel.dataset.planSynced='';});
+                    }
+                    if(data.status==='pending'||(data.status==='approved'&&!data.activatedAt))
+                        window.setTimeout(checkVerifiedStatus,10000);
+                }).catch(function(){if(panel.isConnected)window.setTimeout(checkVerifiedStatus,15000);});
+            }
+            window.setTimeout(checkVerifiedStatus,10000);
+        }
+        function loadPlanOrderHistory(){
+            var list=sheetBody.querySelector('#pix-history-list');
+            if(!list)return;
+            var state=window.RabbitHubSession&&window.RabbitHubSession.get?window.RabbitHubSession.get():null;
+            var user=state&&state.authUser;
+            if(!state||state.status!=='authenticated'||!user||typeof user.getIdToken!=='function'){
+                list.textContent='Entre na sua conta para consultar seus pedidos.';return;
+            }
+            Promise.resolve(user.getIdToken(false)).then(function(token){
+                return fetch('/api/pix-orders',{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+            }).then(function(response){return response.json().then(function(data){if(!response.ok)throw new Error(data.error||'Histórico indisponível.');return data;});})
+            .then(function(data){
+                if(!list.isConnected||!data||data.ok!==true||!Array.isArray(data.orders))return;
+                list.replaceChildren();
+                if(!data.orders.length){list.textContent='Nenhum pedido Pix registrado.';return;}
+                var labels={creating:'Pendente',pending:'Aguardando pagamento',approved:'Aprovado',
+                    rejected:'Recusado',canceled:'Cancelado',expired:'Expirado',reversed:'Revertido'};
+                data.orders.forEach(function(order){
+                    if(!order||!['vip','plus'].includes(order.planId)||order.currency!=='BRL'||
+                       !Number.isSafeInteger(order.amountCents)||!labels[order.status])return;
+                    var item=document.createElement('div');item.className='pix-history-item';
+                    var title=document.createElement('strong');
+                    title.textContent=(order.planId==='vip'?'VIP':'PLUS')+' · '+formatPlanPrice(order.amountCents);
+                    var detail=document.createElement('span');
+                    var date=Date.parse(order.createdAt||'');
+                    detail.textContent=labels[order.status]+(Number.isFinite(date)?' · '+new Date(date).toLocaleDateString('pt-BR'):'');
+                    item.appendChild(title);item.appendChild(detail);list.appendChild(item);
+                });
+            }).catch(function(){if(list.isConnected)list.textContent='Não foi possível consultar seus pedidos agora.';});
+        }
         function bindPlanRequests(){
+            loadPlanPrices();
+            loadPlanOrderHistory();
             var note = sheetBody.querySelector('#plan-contact-note');
             sheetBody.querySelectorAll('[data-plan-request]').forEach(function(button){
                 button.addEventListener('click', function(){
                     if (button.disabled) return;
-                    var planName = button.getAttribute('data-plan-request') || 'plano';
-                    button.disabled = true;
-                    button.textContent = 'Consultando...';
-                    function unavailable(message){
-                        button.disabled = false;
-                        button.textContent = planName === 'VIP' ? 'Solicitar VIP' : 'Entrar na lista de espera';
-                        if (note) note.textContent = message;
-                    }
-                    if (!window.RabbitHubProfileData || typeof window.RabbitHubProfileData.getWhatsappGroupUrl !== 'function') {
-                        unavailable('O contato dos planos ainda não foi configurado. Fale com a equipe pelo canal oficial.');
+                    var planId=button.getAttribute('data-plan-id');
+                    if(!officialPlanPrices||!officialPlanPrices[planId])return;
+                    var state=window.RabbitHubSession&&window.RabbitHubSession.get?window.RabbitHubSession.get():null;
+                    var user=state&&state.authUser;
+                    if(!state||state.status!=='authenticated'||state.ready!==true||!user||
+                       user.uid!==state.uid||typeof user.getIdToken!=='function'){
+                        if(note)note.innerHTML='Entre na sua conta para gerar o Pix. <a href="/login.html">Abrir login</a>';
                         return;
                     }
-                    window.RabbitHubProfileData.getWhatsappGroupUrl().then(function(url){
-                        if (!url) {
-                            unavailable('O contato dos planos ainda não foi configurado no painel administrativo.');
-                            return;
-                        }
-                        button.textContent = 'Abrindo contato...';
-                        window.setTimeout(function(){ window.location.href = url; }, 80);
-                    }).catch(function(){
-                        unavailable('Não foi possível consultar o contato agora. Tente novamente em instantes.');
-                    });
+                    button.disabled = true;
+                    button.textContent='Gerando Pix...';
+                    if(note)note.textContent='Preparando sua cobrança Pix de teste...';
+                    var controller=new AbortController();
+                    var timer=setTimeout(function(){controller.abort();},35000);
+                    Promise.resolve().then(function(){return user.getIdToken(false);}).then(function(token){
+                        if(!token)throw new Error('Sua sessão expirou. Entre novamente.');
+                        return fetch('/api/pix-order',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+                            body:JSON.stringify({planId:planId}),signal:controller.signal});
+                    }).then(function(response){
+                        return response.json().then(function(data){if(!response.ok)throw new Error(data.error||'Pix indisponível.');return data;});
+                    }).then(function(order){
+                        if(!button.isConnected||sheet.getAttribute('data-sheet-kind')!=='planos')return;
+                        showPixCheckout(order,planId);
+                    }).catch(function(error){
+                        if(!button.isConnected)return;
+                        if(note)note.textContent=error&&error.name==='AbortError'?'A solicitação demorou. Tente novamente; o mesmo pedido será reutilizado.':
+                            error&&error.message||'Não foi possível gerar o Pix agora.';
+                        button.disabled=false;
+                        button.textContent=planId==='vip'?'Assinar VIP':'Assinar Plus';
+                    }).finally(function(){clearTimeout(timer);});
                 });
             });
         }
@@ -3294,6 +3450,8 @@ body{padding-top:65px}
         if (activeTab === 'perfil' && !document.querySelector('.yc-sheet.open')) renderPerfil();
     });
     document.addEventListener('rh:planchange', function(){
+        var openPlans = document.querySelector('.yc-sheet.open[data-sheet-kind="planos"] .plans-reference-screen');
+        if(openPlans){sheetBody.innerHTML=renderPlanos();bindPlanRequests();return;}
         var openAccount = document.querySelector('.yc-sheet.open[data-sheet-kind="conta"]');
         if (openAccount && window.RabbitHubProfileData && window.RabbitHubProfileData.getAccount) {
             if(refreshOpenAccount)refreshOpenAccount();
@@ -3368,10 +3526,77 @@ body{padding-top:65px}
         openSearchBtn.setAttribute('aria-expanded', 'false');
         openSearchBtn.setAttribute('aria-label', 'Abrir pesquisa');
         searchInput.value = '';
-        if (searchAssist) searchAssist.hidden = true;
+        dismissSearchAssist();
         restoreActiveView();
         openSearchBtn.focus();
     }
+    function dismissSearchAssist() {
+        searchAssistAllowed = false;
+        if (searchAssist) searchAssist.hidden = true;
+    }
+    function searchViewportHeight() {
+        return window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    }
+    function watchSearchKeyboard() {
+        if (!searchAssistAllowed || document.activeElement !== searchInput) return;
+        var height = searchViewportHeight();
+        if (!searchKeyboardBaseline) searchKeyboardBaseline = height;
+        searchKeyboardMinimum = Math.min(searchKeyboardMinimum || height, height);
+        if (searchKeyboardBaseline - height > 120) searchKeyboardSeen = true;
+        if (searchKeyboardSeen && height - searchKeyboardMinimum > 100) {
+            dismissSearchAssist();
+            searchKeyboardSeen = false;
+        }
+    }
+    searchInput.addEventListener('focus', function() {
+        if (!searchBox.classList.contains('show')) return;
+        searchAssistAllowed = true;
+        searchKeyboardBaseline = searchViewportHeight();
+        searchKeyboardMinimum = searchKeyboardBaseline;
+        searchKeyboardSeen = false;
+        renderSearchAssist([], searchInput.value.trim());
+    });
+    function reopenSearchAssist() {
+        if (searchAssistAllowed || !searchBox.classList.contains('show')) return;
+        searchAssistAllowed = true;
+        searchKeyboardBaseline = searchViewportHeight();
+        searchKeyboardMinimum = searchKeyboardBaseline;
+        searchKeyboardSeen = false;
+        renderSearchAssist([], searchInput.value.trim());
+    }
+    searchInput.addEventListener('pointerdown', reopenSearchAssist);
+    searchInput.addEventListener('touchstart', reopenSearchAssist, {passive:true});
+    searchInput.addEventListener('blur', function() {
+        window.setTimeout(function() {
+            if (!searchAssistTouching && document.activeElement !== searchInput &&
+                (!searchAssist || !searchAssist.contains(document.activeElement))) dismissSearchAssist();
+        }, 150);
+    });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', watchSearchKeyboard);
+    window.addEventListener('resize', watchSearchKeyboard);
+    function markSearchAssistInteraction() {
+        searchAssistTouching = true;
+        window.setTimeout(function() {
+            searchAssistTouching = false;
+            if (document.activeElement !== searchInput &&
+                (!searchAssist || !searchAssist.contains(document.activeElement))) dismissSearchAssist();
+        }, 400);
+    }
+    document.addEventListener('pointerdown', function(event) {
+        if (searchAssist && searchAssist.contains(event.target)) markSearchAssistInteraction();
+        else if (!searchBox.contains(event.target)) dismissSearchAssist();
+    });
+    document.addEventListener('touchstart', function(event) {
+        if (searchAssist && searchAssist.contains(event.target)) markSearchAssistInteraction();
+        else if (!searchBox.contains(event.target)) dismissSearchAssist();
+    }, {passive:true});
+    searchInput.addEventListener('keydown', function(event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            dismissSearchAssist();
+            searchInput.blur();
+        }
+    });
     openSearchBtn.addEventListener('click', function() {
         if (searchBox.classList.contains('show')) {
             closeSearchAndRestore();
@@ -3390,7 +3615,8 @@ body{padding-top:65px}
         if(suggestion){
             searchInput.value=suggestion.getAttribute('data-search-suggestion')||'';
             searchInput.dispatchEvent(new Event('input',{bubbles:true}));
-            searchInput.focus();
+            dismissSearchAssist();
+            searchInput.blur();
             return;
         }
         if(event.target.closest('[data-search-clear]')){
@@ -3415,6 +3641,7 @@ body{padding-top:65px}
     }
 
     searchInput.addEventListener('input', function(e) {
+        if (document.activeElement === searchInput) searchAssistAllowed = true;
         clearTimeout(searchTimeout);
         cancelSearchRequest();
         var requestId = ++viewRequestId;

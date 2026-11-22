@@ -56,10 +56,12 @@
     /* O painel grava premium/vip=true ao conceder acesso. Esse sinal explícito
        prevalece sobre um subscriptionStatus antigo que tenha ficado salvo. */
     var isVip = !expired && explicitPaid && user.banned!==true && user.blocked!==true;
+    var isPlus = isVip && /^plus$/i.test(raw);
     return {
-      key:isVip ? 'vip' : 'free',
-      name:isVip ? 'VIP' : 'Free',
+      key:isPlus ? 'plus' : (isVip ? 'vip' : 'free'),
+      name:isPlus ? 'Plus' : (isVip ? 'VIP' : 'Free'),
       isVip:isVip,
+      isPlus:isPlus,
       premium:isVip,
       expiresAt:Math.max(0,expiry),
       updatedAt:planUpdatedAt,

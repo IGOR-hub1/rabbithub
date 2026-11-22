@@ -1652,7 +1652,7 @@ body{
     return window.RabbitHubAccountPlan.normalize(user).name;
   }
   function isAdmin(user){ return user && ((currentAdmin&&String(user.uid||'')===String(currentAdmin.uid||'')) || user.isAdmin === true || String(user.role || '').toLowerCase() === 'admin'); }
-  function isPremium(user){ return user && planName(user) === 'VIP'; }
+  function isPremium(user){ return !!(user && window.RabbitHubAccountPlan.normalize(user).isVip); }
 
   function skipSegmentPath(){
     var slug=text($('skipAnimeSlug').value).trim().replace(/^\/+|\/+$/g,'');

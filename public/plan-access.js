@@ -10,16 +10,17 @@
   var authoritative=false;
   var subscribed=false;
   var expiryTimer=null;
-  var state=accessFor(false,'','loading',0,false);
+  var state=accessFor(false,'','loading',0,false,false);
 
   function readJSON(key,fallback){
     try{var value=JSON.parse(localStorage.getItem(key)||'null');return value==null?fallback:value;}
     catch(e){return fallback;}
   }
-  function accessFor(vip,uid,source,expiresAt,ready){
+  function accessFor(vip,uid,source,expiresAt,ready,plus){
     vip=vip===true;
+    plus=vip&&plus===true;
     return {
-      uid:String(uid||''),key:vip?'vip':'free',name:vip?'VIP':'Free',isVip:vip,
+      uid:String(uid||''),key:plus?'plus':vip?'vip':'free',name:plus?'Plus':vip?'VIP':'Free',isVip:vip,isPlus:plus,
       customAvatar:true,customTheme:vip,cloudProgress:true,smartFallback:vip,
       skipSegments:vip,nextCountdown:vip,searchAssist:vip,spoilerComments:vip,
       connectedDevices:vip,releaseAlerts:vip,aiRecommendations:vip,
@@ -38,7 +39,7 @@
       !(expiry>0&&expiry<Date.now())&&(user.premium===true||user.vip===true||user.isPremium===true||/(?:vip|pro|premium)/i.test(raw))
     );
     if(normalized)expiry=normalized.expiresAt||0;
-    return accessFor(vip,user.uid,source,expiry,ready);
+    return accessFor(vip,user.uid,source,expiry,ready,normalized?normalized.isPlus:/^plus$/i.test(raw));
   }
   function copy(){var result={};Object.keys(state).forEach(function(key){result[key]=state[key];});return result;}
   function changed(a,b){
@@ -91,7 +92,7 @@
     var session=readJSON('dk_session',{})||{};
     var cached=readJSON(CACHE_KEY,null);
     if(!session.uid||!cached||String(cached.uid||'')!==String(session.uid))return;
-    publish(accessFor(cached.isVip===true||cached.key==='vip',session.uid,'cache',cached.premiumUntil||0,false));
+    publish(accessFor(cached.isVip===true||cached.key==='vip'||cached.key==='plus',session.uid,'cache',cached.premiumUntil||0,false,cached.key==='plus'));
   }
   function onSession(value){
     if(!value)return;
